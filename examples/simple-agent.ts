@@ -1,4 +1,4 @@
-import { LLPClient, TextMessage } from '../src/index.js';
+import { LLPClient } from '../src/index.js';
 
 async function main() {
 	const client = new LLPClient('simple-agent', process.env.LLP_API_KEY || '');

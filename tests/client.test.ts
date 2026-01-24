@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type WebSocket from 'ws';
 import { LLPClient } from '../src/client.js';
-import { NotAuthenticatedError, NotConnectedError, TimeoutError } from '../src/errors.js';
+import { NotAuthenticatedError, TimeoutError } from '../src/errors.js';
 import { TextMessage } from '../src/message.js';
 import { ConnectionStatus, PresenceStatus } from '../src/presence.js';
 
@@ -225,7 +225,7 @@ describe('LLPClient', () => {
 			});
 			messageHandler?.(Buffer.from(authResponse));
 			await connectPromise;
-			const throwError = () => client.onPresence(async (msg: PresenceMessage) => {});
+			const throwError = () => client.onPresence(async (_msg: PresenceMessage) => {});
 			expect(throwError).toThrow(/before connecting/);
 		});
 	});
