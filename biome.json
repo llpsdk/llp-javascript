@@ -1,7 +1,7 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.12/schema.json",
 	"files": {
-		"includes": ["**/*.ts", "**/*.js", "**/*.json"],
+		"includes": ["vitest.config.ts", "src/**/*.ts", "tests/**/*.ts", "*.json", "examples/**/*.ts"],
 		"ignoreUnknown": true
 	},
 	"linter": {
