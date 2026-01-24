@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PresenceMessage, TextMessage } from '../src/message.js';
 import { PresenceStatus } from '../src/presence.js';
 

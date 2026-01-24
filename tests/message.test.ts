@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TextMessageEmptyError, TextMessageReplyError } from '../src/errors.js';
+import { TextMessageEmptyError } from '../src/errors.js';
 import { PresenceMessage, TextMessage } from '../src/message.js';
 import { PresenceStatus } from '../src/presence.js';
 

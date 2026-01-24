@@ -1,0 +1,43 @@
+name: Javascript tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup Biome
+      uses: biomejs/setup-biome@v2
+      with:
+        version: latest
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Install
+      run: npm ci
+
+    - name: Build
+      run: |
+        npm run build
+
+    - name: Run Biome (lint, format, etc.)
+      run: biome ci .
+
+    - name: Run tests
+      run: npm test

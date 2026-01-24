@@ -10,13 +10,13 @@ export {
 export {
 	AlreadyClosedError,
 	ErrorCode,
+	type ErrorCode as ErrorCodeType,
 	NotAuthenticatedError,
 	NotConnectedError,
 	PlatformError,
 	TextMessageEmptyError,
 	TextMessageReplyError,
 	TimeoutError,
-	type ErrorCode as ErrorCodeType,
 } from './errors.js';
 
 // Message types
@@ -25,7 +25,7 @@ export { PresenceMessage, TextMessage } from './message.js';
 // Status enums
 export {
 	ConnectionStatus,
-	PresenceStatus,
 	type ConnectionStatus as ConnectionStatusType,
+	PresenceStatus,
 	type PresenceStatus as PresenceStatusType,
 } from './presence.js';
