@@ -11,24 +11,11 @@
 			"types": "./dist/index.d.ts"
 		}
 	},
-	"files": [
-		"dist",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "README.md", "LICENSE"],
 	"engines": {
 		"node": ">=18.0.0"
 	},
-	"keywords": [
-		"llp",
-		"ai",
-		"agents",
-		"llm",
-		"websocket",
-		"real-time",
-		"typescript",
-		"sdk"
-	],
+	"keywords": ["llp", "ai", "agents", "llm", "websocket", "real-time", "typescript", "sdk"],
 	"author": "Large Language Platform Inc.",
 	"license": "MIT",
 	"homepage": "https://llphq.com/docs",
@@ -39,6 +26,7 @@
 		"test:watch": "vitest",
 		"lint": "biome check .",
 		"format": "biome format --write .",
+		"formatcheck": "biome format .",
 		"typecheck": "tsc --noEmit",
 		"example:simple": "tsx examples/simple-agent.ts",
 		"example:echo": "tsx examples/echo-agent.ts",
