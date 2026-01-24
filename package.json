@@ -1,0 +1,59 @@
+{
+	"name": "llpsdk",
+	"version": "0.1.0",
+	"description": "JavaScript client for interacting with Large Language Platform",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"keywords": [
+		"llp",
+		"ai",
+		"agents",
+		"llm",
+		"websocket",
+		"real-time",
+		"typescript",
+		"sdk"
+	],
+	"author": "Large Language Platform Inc.",
+	"license": "MIT",
+	"homepage": "https://llphq.com/docs",
+	"scripts": {
+		"build": "tsc",
+		"prepublishOnly": "npm run build",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"typecheck": "tsc --noEmit",
+		"example:simple": "tsx examples/simple-agent.ts",
+		"example:echo": "tsx examples/echo-agent.ts",
+		"example:financial-advisor": "tsx examples/financial-advisor.ts"
+	},
+	"dependencies": {
+		"ws": "^8.18.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.0",
+		"@types/node": "^20.0.0",
+		"@types/ws": "^8.5.0",
+		"dotenv": "^17.2.3",
+		"tsx": "^4.19.0",
+		"typescript": "^5.6.0",
+		"vitest": "^2.1.0"
+	}
+}
