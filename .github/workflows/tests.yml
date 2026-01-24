@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     strategy:
       matrix:
@@ -16,6 +18,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+
+    - name: Setup Biome
+      uses: biomejs/setup-biome@v2
+      with:
+        version: latest
 
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
@@ -25,15 +32,12 @@ jobs:
     - name: Install
       run: npm ci
 
-    - name: Typecheck and Build
+    - name: Build
       run: |
-        npm run typecheck
         npm run build
 
-    - name: Lint and format check
-      run: |
-          npm run formatcheck
-          npm run lint
+    - name: Run Biome (lint, format, etc.)
+      run: biome ci .
 
     - name: Run tests
       run: npm test

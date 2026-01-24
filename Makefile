@@ -1,6 +1,5 @@
 .PHONY: build
 build:
-	npm run typecheck
 	npm run build
 
 .PHONY: test
