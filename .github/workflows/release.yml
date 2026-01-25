@@ -1,4 +1,4 @@
-name: Publish package to npmjs
+name: Publishes llpsdk package to npmjs
 on:
   release:
     types: [published]
@@ -8,7 +8,7 @@ permissions:
   id-token: write
 
 jobs:
-  release-build:
+  publish-release:
     runs-on: ubuntu-latest
     environment:
       name: npmjs

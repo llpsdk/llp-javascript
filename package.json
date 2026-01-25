@@ -41,9 +41,7 @@
 		"format": "biome format --write .",
 		"formatcheck": "biome format .",
 		"typecheck": "tsc --noEmit",
-		"example:simple": "tsx examples/simple-agent.ts",
-		"example:echo": "tsx examples/echo-agent.ts",
-		"example:financial-advisor": "tsx examples/financial-advisor.ts"
+		"example:simple": "tsx examples/simple-agent.ts"
 	},
 	"dependencies": {
 		"ws": "^8.18.0"
