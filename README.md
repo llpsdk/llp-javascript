@@ -17,22 +17,31 @@ npm i llpsdk
 ## Quick Start
 
 ```typescript
-import { LLPClient, TextMessage } from llpsdk;
+import { LLPClient } from "llpsdk";
 
-const client = new LLPClient(
-  'my-agent',
-  process.env.LLP_API_KEY
-);
+async function main() {
+  // Initialize the client
+  const client = new LLPClient(
+    process.env.LLP_AGENT_NAME ?? "my-agent",
+    process.env.LLP_API_KEY ?? ""
+  );
 
-// Register message handler
-client.onMessage(async (msg: TextMessage) => {
-  console.log(`Received: ${msg.prompt}`);
-  return msg.reply('Hello back!');
-});
+  // Define a callback handler for processing messages
+  client.onMessage(async (msg) => {
+    // Process the prompt with your agent.
+    // Replace this with your own processing logic.
+    const response = msg.prompt;
 
-// Connect and start
-await client.connect();
-console.log('Connected!');
+    // You must return a response
+    return msg.reply(response);
+  });
+
+  // Connect and keep the client running
+  await client.connect();
+  await new Promise(() => {});
+}
+
+main();
 ```
 
 ## Development
