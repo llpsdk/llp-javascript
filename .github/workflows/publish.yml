@@ -1,14 +1,14 @@
-name: Publish package to name
+name: Publish package to npmjs
 on:
   release:
     types: [published]
 
 permissions:
-  content: read
+  contents: read
   id-token: write
 
 jobs:
-  build:
+  release-build:
     runs-on: ubuntu-latest
     environment:
       name: npmjs
