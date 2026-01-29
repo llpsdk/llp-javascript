@@ -114,7 +114,9 @@ describe('LLPClient', () => {
 			const authResponse = JSON.stringify({
 				type: 'authenticated',
 				id: 'auth-1',
-				session_id: 'session-123',
+				data: {
+					session_id: 'session-123',
+				},
 			});
 
 			messageHandler?.(Buffer.from(authResponse));
@@ -143,7 +145,9 @@ describe('LLPClient', () => {
 			const authResponse = JSON.stringify({
 				type: 'authenticated',
 				id: 'auth-1',
-				session_id: 'session-123',
+				data: {
+					session_id: 'session-123',
+				},
 			});
 			messageHandler?.(Buffer.from(authResponse));
 
@@ -169,7 +173,9 @@ describe('LLPClient', () => {
 			const authResponse = JSON.stringify({
 				type: 'authenticated',
 				id: 'auth-1',
-				session_id: 'session-123',
+				data: {
+					session_id: 'session-123',
+				},
 			});
 			messageHandler?.(Buffer.from(authResponse));
 			await connectPromise;
@@ -199,7 +205,9 @@ describe('LLPClient', () => {
 			const authResponse = JSON.stringify({
 				type: 'authenticated',
 				id: 'auth-1',
-				session_id: 'session-123',
+				data: {
+					session_id: 'session-123',
+				},
 			});
 			messageHandler?.(Buffer.from(authResponse));
 			await connectPromise;
@@ -221,7 +229,9 @@ describe('LLPClient', () => {
 			const authResponse = JSON.stringify({
 				type: 'authenticated',
 				id: 'auth-1',
-				session_id: 'session-123',
+				data: {
+					session_id: 'session-123',
+				},
 			});
 			messageHandler?.(Buffer.from(authResponse));
 			await connectPromise;

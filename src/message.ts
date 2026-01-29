@@ -8,8 +8,15 @@ export class TextMessage {
 	readonly recipient: string;
 	readonly prompt: string;
 	readonly encrypted: boolean;
+	readonly attachment: string;
 
-	constructor(recipient: string, prompt: string, id?: string, sender?: string) {
+	constructor(
+		recipient: string,
+		prompt: string,
+		attachment?: string,
+		id?: string,
+		sender?: string,
+	) {
 		if (!prompt.trim()) {
 			throw new TextMessageEmptyError('Message prompt cannot be empty');
 		}
@@ -18,17 +25,18 @@ export class TextMessage {
 		this.recipient = recipient;
 		this.prompt = prompt;
 		this.encrypted = false;
+		this.attachment = attachment ?? '';
 	}
 
 	reply(prompt: string): TextMessage {
 		if (!this.id) {
 			throw new TextMessageReplyError('Cannot reply to message without ID');
 		}
-		return new TextMessage(this.sender, prompt, this.id);
+		return new TextMessage(this.sender, prompt, null, this.id);
 	}
 
 	encode(): string {
-		return JSON.stringify({
+		const payload = {
 			type: 'message',
 			id: this.id,
 			from: this.sender,
@@ -37,7 +45,15 @@ export class TextMessage {
 				prompt: Buffer.from(this.prompt, 'utf-8').toString('base64'),
 				encrypted: this.encrypted,
 			},
-		});
+		};
+		if (this.hasAttachment()) {
+			payload.data.attachment = this.attachment;
+		}
+		return JSON.stringify(payload);
+	}
+
+	hasAttachment(): boolean {
+		return this.attachment !== null && this.attachment !== '';
 	}
 
 	static decode(json: Record<string, unknown>): TextMessage {
@@ -46,7 +62,8 @@ export class TextMessage {
 		const prompt = Buffer.from(data.prompt as string, 'base64').toString('utf-8');
 		const id = json.id as string;
 		const sender = json.from as string;
-		return new TextMessage(recipient, prompt, id, sender);
+		const attachment = data.attachment_url as string;
+		return new TextMessage(recipient, prompt, attachment, id, sender);
 	}
 }
 
