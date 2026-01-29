@@ -62,7 +62,9 @@ describe('LLPClient Integration Tests', () => {
 		const authResponse = JSON.stringify({
 			type: 'authenticated',
 			id: 'auth-1',
-			session_id: 'session-123',
+			data: {
+				session_id: 'session-123',
+			},
 		});
 		messageHandler?.(Buffer.from(authResponse));
 
@@ -218,10 +220,8 @@ describe('LLPClient Integration Tests', () => {
 			const errorMsg = JSON.stringify({
 				type: 'error',
 				id: msg.id,
-				data: {
-					code: ErrorCode.AgentNotFound,
-					message: 'Agent not found',
-				},
+				code: ErrorCode.AgentNotFound,
+				message: 'Agent not found',
 			});
 
 			messageHandler?.(Buffer.from(errorMsg));
@@ -245,10 +245,8 @@ describe('LLPClient Integration Tests', () => {
 			const errorMsg = JSON.stringify({
 				type: 'error',
 				id: 'auth-error',
-				data: {
-					code: ErrorCode.InvalidKey,
-					message: 'Invalid API key',
-				},
+				code: ErrorCode.InvalidKey,
+				message: 'Invalid API key',
 			});
 
 			messageHandler?.(Buffer.from(errorMsg));

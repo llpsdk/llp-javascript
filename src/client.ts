@@ -244,7 +244,7 @@ export class LLPClient {
 	}
 
 	private handleAuthenticated(json: Record<string, unknown>): void {
-		this.sessionId = json.session_id as string;
+		this.sessionId = (json.data as Record<string, unknown>).session_id as string;
 
 		if (this.authResolve) {
 			this.authResolve();
@@ -285,13 +285,8 @@ export class LLPClient {
 	}
 
 	private handleErrorMessage(json: Record<string, unknown>): void {
-		const data = json.data as Record<string, unknown> | undefined;
-		if (!data) {
-			console.error('Received error message without data field:', json);
-			return;
-		}
-		const code = data.code as ErrorCode;
-		const message = data.message as string;
+		const code = json.code as ErrorCode;
+		const message = json.message as string;
 		const messageId = json.id as string | undefined;
 
 		const error = new PlatformError(code, message, messageId);

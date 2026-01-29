@@ -17,7 +17,7 @@ describe('TextMessage', () => {
 		});
 
 		it('should use provided ID and sender', () => {
-			const msg = new TextMessage('bob', 'Hello', 'custom-id');
+			const msg = new TextMessage('bob', 'Hello', null, 'custom-id');
 			expect(msg.id).toBe('custom-id');
 		});
 
@@ -58,7 +58,7 @@ describe('TextMessage', () => {
 	});
 
 	describe('decode', () => {
-		it('should decode JSON to TextMessage', () => {
+		it('should decode JSON without attachment to TextMessage', () => {
 			const json = {
 				type: 'message',
 				id: 'msg-456',
@@ -77,6 +77,25 @@ describe('TextMessage', () => {
 			expect(msg.recipient).toBe('bob');
 			expect(msg.prompt).toBe('Hello Bob');
 			expect(msg.encrypted).toBe(false);
+			expect(msg.attachment).toBe('');
+			expect(msg.hasAttachment()).toBe(false);
+		});
+
+		it('should decode JSON with attachment to TextMessage', () => {
+			const json = {
+				type: 'message',
+				id: 'msg-456',
+				from: 'alice',
+				data: {
+					to: 'bob',
+					prompt: Buffer.from('Hello Bob', 'utf-8').toString('base64'),
+					attachment_url: 'http://example.com/uploads/hello.txt',
+				},
+			};
+			const msg = TextMessage.decode(json);
+
+			expect(msg.attachment).toBe('http://example.com/uploads/hello.txt');
+			expect(msg.hasAttachment()).toBe(true);
 		});
 
 		it('should decode unicode characters correctly', () => {
@@ -120,7 +139,7 @@ describe('TextMessage', () => {
 
 	describe('round-trip encoding', () => {
 		it('should preserve all data through encode/decode cycle', () => {
-			const original = new TextMessage('bob', 'Test message 世界', 'msg-200');
+			const original = new TextMessage('bob', 'Test message 世界', null, 'msg-200');
 
 			const encoded = original.encode();
 			const json = JSON.parse(encoded);

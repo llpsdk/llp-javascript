@@ -1,6 +1,8 @@
+import { config } from 'dotenv';
 import { LLPClient } from '../src/index.js';
 
 async function main() {
+	config();
 	const client = new LLPClient('simple-agent', process.env.LLP_API_KEY || '');
 
 	// Register handlers

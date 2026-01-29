@@ -17,28 +17,27 @@ npm i llpsdk
 ## Quick Start
 
 ```typescript
-import { LLPClient } from "llpsdk";
+import { LLPClient } from 'llpsdk';
+import { config } from 'dotenv';
 
 async function main() {
-  // Initialize the client
-  const client = new LLPClient(
-    process.env.LLP_AGENT_NAME ?? "my-agent",
-    process.env.LLP_API_KEY ?? ""
-  );
+	config();
+	// Initialize the client
+	const client = new LLPClient('my-agent', process.env.LLP_API_KEY ?? '');
 
-  // Define a callback handler for processing messages
-  client.onMessage(async (msg) => {
-    // Process the prompt with your agent.
-    // Replace this with your own processing logic.
-    const response = msg.prompt;
+	// Define a callback handler for processing messages
+	client.onMessage(async (msg) => {
+		// Process the prompt with your agent.
+		// Replace this with your own processing logic.
+		const response = msg.prompt;
 
-    // You must return a response
-    return msg.reply(response);
-  });
+		// You must return a response
+		return msg.reply(response);
+	});
 
-  // Connect and keep the client running
-  await client.connect();
-  await new Promise(() => {});
+	// Connect and keep the client running
+	await client.connect();
+	await new Promise(() => {});
 }
 
 main();

@@ -9,7 +9,7 @@ describe('Message Handlers', () => {
 				return msg.reply('Response');
 			};
 
-			const input = new TextMessage('bob', 'Hello', 'msg-1', 'alice');
+			const input = new TextMessage('bob', 'Hello', null, 'msg-1', 'alice');
 
 			const result = await handler(input);
 			expect(result.prompt).toBe('Response');
