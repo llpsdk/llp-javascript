@@ -32,11 +32,11 @@ export class TextMessage {
 		if (!this.id) {
 			throw new TextMessageReplyError('Cannot reply to message without ID');
 		}
-		return new TextMessage(this.sender, prompt, null, this.id);
+		return new TextMessage(this.sender, prompt, undefined, this.id);
 	}
 
 	encode(): string {
-		const payload = {
+		const payload: Record<string, unknown> = {
 			type: 'message',
 			id: this.id,
 			from: this.sender,
@@ -44,11 +44,9 @@ export class TextMessage {
 				to: this.recipient,
 				prompt: Buffer.from(this.prompt, 'utf-8').toString('base64'),
 				encrypted: this.encrypted,
+				...(this.hasAttachment() ? { attachment: this.attachment } : {}),
 			},
 		};
-		if (this.hasAttachment()) {
-			payload.data.attachment = this.attachment;
-		}
 		return JSON.stringify(payload);
 	}
 

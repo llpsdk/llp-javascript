@@ -244,7 +244,7 @@ export class LLPClient {
 	}
 
 	private handleAuthenticated(json: Record<string, unknown>): void {
-		this.sessionId = json.data.session_id as string;
+		this.sessionId = (json.data as Record<string, unknown>).session_id as string;
 
 		if (this.authResolve) {
 			this.authResolve();
