@@ -21,6 +21,7 @@ export {
 
 // Message types
 export { PresenceMessage, TextMessage } from './message.js';
+export { PlatformTraceHandler, TraceMessage, type TraceInput, type TracePayload } from './trace.js';
 
 // Status enums
 export {

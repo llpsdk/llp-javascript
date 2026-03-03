@@ -11,12 +11,14 @@ import {
 } from './errors.js';
 import { PresenceMessage, TextMessage } from './message.js';
 import { ConnectionStatus, PresenceStatus } from './presence.js';
+import { PlatformTraceHandler, TraceMessage, type TraceInput } from './trace.js';
 
 export interface LLPClientConfig {
 	readonly url?: string; // Default: wss://llphq.com/agent/websocket
 	readonly connectTimeout?: number; // Default: 10000ms
 	readonly responseTimeout?: number; // Default: 10000ms
 	readonly maxQueueSize?: number; // Default: 32
+	readonly tracing?: boolean; // Default: false
 }
 
 export type MessageHandler = (msg: TextMessage) => Promise<TextMessage>;
@@ -45,11 +47,20 @@ export class LLPClient {
 
 	private isClosing = false;
 
+	// Exposed when tracing is enabled
+	readonly traceHandler?: PlatformTraceHandler;
+
 	constructor(
 		private readonly name: string,
 		private readonly apiKey: string,
 		private readonly config: LLPClientConfig = {},
-	) {}
+	) {
+		this.traceHandler = this.config.tracing
+			? new PlatformTraceHandler({
+					sendTrace: (trace) => this.sendTrace(trace),
+			  })
+			: undefined;
+	}
 
 	async connect(timeout?: number): Promise<void> {
 		const timeoutMs = timeout ?? this.config.connectTimeout ?? 10000;
@@ -146,6 +157,15 @@ export class LLPClient {
 			throw new NotAuthenticatedError('Must be authenticated to send messages');
 		}
 
+		this.enqueue(msg.encode());
+	}
+
+	async sendTrace(trace: TraceMessage | TraceInput): Promise<void> {
+		if (this.status !== ConnectionStatus.Authenticated) {
+			throw new NotAuthenticatedError('Must be authenticated to send traces');
+		}
+
+		const msg = trace instanceof TraceMessage ? trace : new TraceMessage(trace.prompt, trace);
 		this.enqueue(msg.encode());
 	}
 
