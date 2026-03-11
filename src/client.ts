@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
+import type { Annotater } from './annotate.js';
 import {
 	AlreadyClosedError,
 	AlreadyConnectedError,
@@ -9,8 +10,7 @@ import {
 	PlatformError,
 	TimeoutError,
 } from './errors.js';
-import type { Annotater } from './annotate.js';
-import { PresenceMessage, TextMessage, ToolCall } from './message.js';
+import { PresenceMessage, TextMessage, type ToolCall } from './message.js';
 import { ConnectionStatus, PresenceStatus } from './presence.js';
 
 export interface LLPClientConfig {

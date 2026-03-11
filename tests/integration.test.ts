@@ -113,7 +113,7 @@ describe('LLPClient Integration Tests', () => {
 
 		it('should handle incoming messages and send replies', async () => {
 			const replies: TextMessage[] = [];
-			client.onMessage(async (msg: TextMessage) => {
+			client.onMessage(async (_annotater, msg: TextMessage) => {
 				const reply = msg.reply(`Echo: ${msg.prompt}`);
 				replies.push(reply);
 				return reply;

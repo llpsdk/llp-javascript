@@ -49,11 +49,7 @@ export class LLPToolCallMiddleware {
 		private readonly annotater: Annotater,
 	) {}
 
-	handleToolStart(
-		tool: ToolInfo | null | undefined,
-		input: unknown,
-		runId: string,
-	): void {
+	handleToolStart(tool: ToolInfo | null | undefined, input: unknown, runId: string): void {
 		const name = tool?.name ?? 'unknown';
 		const parameters = serialize(input);
 		this.pending.set(runId, { name, parameters, startMs: Date.now() });

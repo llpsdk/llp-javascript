@@ -1,3 +1,6 @@
+// Annotater interface
+export type { Annotater } from './annotate.js';
+
 // Core client
 export {
 	LLPClient,
@@ -18,9 +21,6 @@ export {
 	TextMessageReplyError,
 	TimeoutError,
 } from './errors.js';
-
-// Annotater interface
-export type { Annotater } from './annotate.js';
 
 // Message types
 export { PresenceMessage, TextMessage, ToolCall } from './message.js';
