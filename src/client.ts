@@ -9,7 +9,8 @@ import {
 	PlatformError,
 	TimeoutError,
 } from './errors.js';
-import { PresenceMessage, TextMessage } from './message.js';
+import type { Annotater } from './annotate.js';
+import { PresenceMessage, TextMessage, ToolCall } from './message.js';
 import { ConnectionStatus, PresenceStatus } from './presence.js';
 
 export interface LLPClientConfig {
@@ -19,10 +20,10 @@ export interface LLPClientConfig {
 	readonly maxQueueSize?: number; // Default: 32
 }
 
-export type MessageHandler = (msg: TextMessage) => Promise<TextMessage>;
+export type MessageHandler = (annotater: Annotater, msg: TextMessage) => Promise<TextMessage>;
 export type PresenceHandler = (msg: PresenceMessage) => void | Promise<void>;
 
-export class LLPClient {
+export class LLPClient implements Annotater {
 	private ws: WebSocket | null = null;
 	private status: ConnectionStatus = ConnectionStatus.Disconnected;
 	private sessionId: string | null = null;
@@ -139,6 +140,13 @@ export class LLPClient {
 
 			this.enqueue(msg.encode());
 		});
+	}
+
+	async annotateToolCall(toolCall: ToolCall): Promise<void> {
+		if (this.status !== ConnectionStatus.Authenticated) {
+			throw new NotAuthenticatedError('Must be authenticated to annotate tool calls');
+		}
+		this.enqueue(toolCall.encode());
 	}
 
 	async sendAsyncMessage(msg: TextMessage): Promise<void> {
@@ -267,7 +275,7 @@ export class LLPClient {
 		// Otherwise, call the message handler
 		if (this.messageHandler) {
 			try {
-				const reply = await this.messageHandler(msg);
+				const reply = await this.messageHandler(this, msg);
 				await this.sendAsyncMessage(reply);
 			} catch (err) {
 				console.error('Error in message handler:', err);

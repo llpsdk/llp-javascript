@@ -9,6 +9,18 @@
 		".": {
 			"import": "./dist/index.js",
 			"types": "./dist/index.d.ts"
+		},
+		"./langchain": {
+			"import": "./dist/langchain.js",
+			"types": "./dist/langchain.d.ts"
+		}
+	},
+	"peerDependencies": {
+		"@langchain/core": ">=0.3.0"
+	},
+	"peerDependenciesMeta": {
+		"@langchain/core": {
+			"optional": true
 		}
 	},
 	"files": [

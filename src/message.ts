@@ -2,6 +2,57 @@ import { randomUUID } from 'node:crypto';
 import { TextMessageEmptyError, TextMessageReplyError } from './errors.js';
 import type { PresenceStatus } from './presence.js';
 
+// =============================================================================
+// ToolCall
+// =============================================================================
+
+export class ToolCall {
+	readonly id: string;
+	readonly recipient: string;
+	readonly name: string;
+	readonly parameters: string;
+	readonly result: string;
+	readonly threwException: boolean;
+	readonly durationMs: number;
+
+	constructor(args: {
+		id: string;
+		recipient: string;
+		name: string;
+		parameters: string;
+		result: string;
+		threwException: boolean;
+		durationMs: number;
+	}) {
+		this.id = args.id;
+		this.recipient = args.recipient;
+		this.name = args.name;
+		this.parameters = args.parameters;
+		this.result = args.result;
+		this.threwException = args.threwException;
+		this.durationMs = args.durationMs;
+	}
+
+	encode(): string {
+		return JSON.stringify({
+			type: 'tool_call',
+			id: this.id,
+			data: {
+				to: this.recipient,
+				name: this.name,
+				parameters: this.parameters,
+				result: this.result,
+				threw_exception: this.threwException,
+				duration_ms: this.durationMs,
+			},
+		});
+	}
+}
+
+// =============================================================================
+// TextMessage
+// =============================================================================
+
 export class TextMessage {
 	readonly id: string;
 	readonly sender: string;
@@ -52,6 +103,38 @@ export class TextMessage {
 
 	hasAttachment(): boolean {
 		return this.attachment !== null && this.attachment !== '';
+	}
+
+	/**
+	 * Factory for a successful tool call record.
+	 * Stamps the correct message ID and recipient so the platform
+	 * can correlate this tool call with the originating message.
+	 */
+	toolCall(name: string, parameters: string, result: string, durationMs: number): ToolCall {
+		return new ToolCall({
+			id: this.id,
+			recipient: this.sender,
+			name,
+			parameters,
+			result,
+			threwException: false,
+			durationMs,
+		});
+	}
+
+	/**
+	 * Factory for a failed tool call record.
+	 */
+	toolCallException(name: string, parameters: string, err: Error, durationMs: number): ToolCall {
+		return new ToolCall({
+			id: this.id,
+			recipient: this.sender,
+			name,
+			parameters,
+			result: err.message,
+			threwException: true,
+			durationMs,
+		});
 	}
 
 	static decode(json: Record<string, unknown>): TextMessage {

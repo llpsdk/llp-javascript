@@ -19,8 +19,11 @@ export {
 	TimeoutError,
 } from './errors.js';
 
+// Annotater interface
+export type { Annotater } from './annotate.js';
+
 // Message types
-export { PresenceMessage, TextMessage } from './message.js';
+export { PresenceMessage, TextMessage, ToolCall } from './message.js';
 
 // Status enums
 export {
