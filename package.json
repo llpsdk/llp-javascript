@@ -16,10 +16,14 @@
 		}
 	},
 	"peerDependencies": {
-		"@langchain/core": ">=0.3.0"
+		"@langchain/core": ">=0.3.0",
+		"langchain": ">=1.0.0"
 	},
 	"peerDependenciesMeta": {
 		"@langchain/core": {
+			"optional": true
+		},
+		"langchain": {
 			"optional": true
 		}
 	},
@@ -59,10 +63,12 @@
 		"ws": "^8.18.0"
 	},
 	"devDependencies": {
+		"@langchain/core": "^1.0.4",
 		"@biomejs/biome": "^2.3.12",
 		"@types/node": "^20.0.0",
 		"@types/ws": "^8.5.0",
 		"dotenv": "^17.2.3",
+		"langchain": "^1.0.6",
 		"tsx": "^4.19.0",
 		"typescript": "^5.6.0",
 		"vitest": "^2.1.0"

@@ -1,30 +1,35 @@
 import { describe, expect, it } from 'vitest';
+import type { Annotater } from '../src/annotate.js';
 import { PresenceMessage, TextMessage } from '../src/message.js';
 import { PresenceStatus } from '../src/presence.js';
 
 describe('Message Handlers', () => {
 	describe('MessageHandler type', () => {
+		const annotater: Annotater = {
+			annotateToolCall: async () => {},
+		};
+
 		it('should accept async function that returns TextMessage', async () => {
-			const handler = async (msg: TextMessage): Promise<TextMessage> => {
+			const handler = async (_annotater: Annotater, msg: TextMessage): Promise<TextMessage> => {
 				return msg.reply('Response');
 			};
 
 			const input = new TextMessage('bob', 'Hello', null, 'msg-1', 'alice');
 
-			const result = await handler(input);
+			const result = await handler(annotater, input);
 			expect(result.prompt).toBe('Response');
 			expect(result.recipient).toBe('alice');
 		});
 
 		it('should allow handler to process message content', async () => {
-			const handler = async (msg: TextMessage): Promise<TextMessage> => {
+			const handler = async (_annotater: Annotater, msg: TextMessage): Promise<TextMessage> => {
 				const upperPrompt = msg.prompt.toUpperCase();
 				return msg.reply(`Echo: ${upperPrompt}`);
 			};
 
 			const input = new TextMessage('bob', 'hello world');
 
-			const result = await handler(input);
+			const result = await handler(annotater, input);
 			expect(result.prompt).toBe('Echo: HELLO WORLD');
 		});
 	});

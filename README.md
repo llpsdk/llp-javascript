@@ -26,7 +26,7 @@ async function main() {
 	const client = new LLPClient('my-agent', process.env.LLP_API_KEY ?? '');
 
 	// Define a callback handler for processing messages
-	client.onMessage(async (msg) => {
+	client.onMessage(async (_annotater, msg) => {
 		// Process the prompt with your agent.
 		// Replace this with your own processing logic.
 		const response = msg.prompt;
@@ -41,6 +41,41 @@ async function main() {
 }
 
 main();
+```
+
+## LangChain Tool Call Capture
+
+If your LangChain agent uses tools, the SDK can automatically annotate those
+tool calls back to LLP.
+
+```typescript
+import { LLPClient } from 'llpsdk';
+import { createLLPToolMiddleware } from 'llpsdk/langchain';
+import { createAgent, tool } from 'langchain';
+import * as z from 'zod';
+
+const weatherTool = tool(
+	async ({ city }: { city: string }) => `Weather for ${city}: sunny`,
+	{
+		name: 'weather',
+		description: 'Look up the weather for a city',
+		schema: z.object({ city: z.string() }),
+	},
+);
+
+client.onMessage(async (annotater, msg) => {
+	const agent = createAgent({
+		model,
+		tools: [weatherTool],
+		middleware: [createLLPToolMiddleware(msg, annotater)],
+	});
+
+	const result = await agent.invoke({
+		messages: [{ role: 'user', content: msg.prompt }],
+	});
+
+	return msg.reply(String(result.messages.at(-1)?.content ?? ''));
+});
 ```
 
 ## Development

@@ -209,14 +209,14 @@ describe('LLPClient', () => {
 					session_id: 'session-123',
 				},
 			});
-			messageHandler?.(Buffer.from(authResponse));
-			await connectPromise;
-			const throwError = () =>
-				client.onMessage(async (msg: TextMessage) => {
-					return msg;
-				});
-			expect(throwError).toThrow(/before connecting/);
-		});
+				messageHandler?.(Buffer.from(authResponse));
+				await connectPromise;
+				const throwError = () =>
+					client.onMessage(async (_annotater, msg: TextMessage) => {
+						return msg;
+					});
+				expect(throwError).toThrow(/before connecting/);
+			});
 	});
 
 	describe('onPresence', () => {
