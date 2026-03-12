@@ -14,23 +14,40 @@ describe('LangChain integration', () => {
 	});
 
 	it('creates middleware that annotates successful tool calls', async () => {
-		const { createLLPToolMiddleware } = await import('../src/langchain.js');
+		const { createLLPToolMiddleware, llpMiddlewareContextSchema } = await import(
+			'../src/langchain.js'
+		);
 		const annotateToolCall = vi.fn().mockResolvedValue(undefined);
 		const annotater: Annotater = { annotateToolCall };
-		const msg = new TextMessage('financial-advisor', 'Summarize the invoice', undefined, 'msg-123', 'user-1');
+		const msg = new TextMessage(
+			'financial-advisor',
+			'Summarize the invoice',
+			undefined,
+			'msg-123',
+			'user-1',
+		);
 
-		const middleware = createLLPToolMiddleware(msg, annotater);
+		const callsBefore = createMiddlewareMock.mock.calls.length;
+		const middleware = createLLPToolMiddleware();
 		const result = await middleware.wrapToolCall(
 			{
 				toolCall: {
 					name: 'load_invoice_pdf',
 					args: { url: 'https://example.com/invoice.pdf' },
 				},
+				runtime: {
+					context: {
+						llpMessage: msg,
+						llpClient: annotater,
+					},
+				},
 			},
 			async () => 'Invoice total: $50',
 		);
 
-		expect(createMiddlewareMock).toHaveBeenCalledTimes(1);
+		expect(createMiddlewareMock).toHaveBeenCalledTimes(callsBefore + 1);
+		expect(middleware.name).toBe('LLPToolCallMiddleware');
+		expect(middleware.contextSchema).toBe(llpMiddlewareContextSchema);
 		expect(result).toBe('Invoice total: $50');
 		expect(annotateToolCall).toHaveBeenCalledTimes(1);
 
@@ -45,8 +62,14 @@ describe('LangChain integration', () => {
 		const { createLLPToolMiddleware } = await import('../src/langchain.js');
 		const annotateToolCall = vi.fn().mockResolvedValue(undefined);
 		const annotater: Annotater = { annotateToolCall };
-		const msg = new TextMessage('financial-advisor', 'Summarize the invoice', undefined, 'msg-123', 'user-1');
-		const middleware = createLLPToolMiddleware(msg, annotater);
+		const msg = new TextMessage(
+			'financial-advisor',
+			'Summarize the invoice',
+			undefined,
+			'msg-123',
+			'user-1',
+		);
+		const middleware = createLLPToolMiddleware();
 		const error = new Error('network down');
 
 		await expect(
@@ -55,6 +78,12 @@ describe('LangChain integration', () => {
 					toolCall: {
 						name: 'load_invoice_pdf',
 						args: { url: 'https://example.com/invoice.pdf' },
+					},
+					runtime: {
+						context: {
+							llpMessage: msg,
+							llpClient: annotater,
+						},
 					},
 				},
 				async () => {

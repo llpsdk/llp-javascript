@@ -209,17 +209,17 @@ describe('LLPClient', () => {
 					session_id: 'session-123',
 				},
 			});
-				messageHandler?.(Buffer.from(authResponse));
-				await connectPromise;
-				const throwError = () =>
-					client.onMessage(async (_annotater, msg: TextMessage) => {
-						return msg;
-					});
-				expect(throwError).toThrow(/before connecting/);
-			});
+			messageHandler?.(Buffer.from(authResponse));
+			await connectPromise;
+			const throwError = () =>
+				client.onMessage(async (_session, msg: TextMessage) => {
+					return msg;
+				});
+			expect(throwError).toThrow(/before connecting/);
+		});
 	});
 
-	describe('onPresence', () => {
+	describe('onStart', () => {
 		it('should throw if client is connected', async () => {
 			const connectPromise = client.connect();
 			const openHandler = mockWs.on.mock.calls.find((call) => call[0] === 'open')?.[1];
@@ -235,7 +235,7 @@ describe('LLPClient', () => {
 			});
 			messageHandler?.(Buffer.from(authResponse));
 			await connectPromise;
-			const throwError = () => client.onPresence(async (_msg: PresenceMessage) => {});
+			const throwError = () => client.onStart(async (_session, _msg: PresenceMessage) => {});
 			expect(throwError).toThrow(/before connecting/);
 		});
 	});

@@ -6,7 +6,7 @@ async function main() {
 	const client = new LLPClient('simple-agent', process.env.LLP_API_KEY || '');
 
 	// Register handlers
-	client.onMessage(async (_annotater, msg) => {
+	client.onMessage(async (_session, msg) => {
 		// process msg.prompt with your agent
 		return msg.reply('hello from TypeScript!');
 	});

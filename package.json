@@ -60,11 +60,12 @@
 		"example": "tsx examples/simple-agent.ts"
 	},
 	"dependencies": {
-		"ws": "^8.18.0"
+		"ws": "^8.18.0",
+		"zod": "^3.25.76"
 	},
 	"devDependencies": {
-		"@langchain/core": "^1.0.4",
 		"@biomejs/biome": "^2.3.12",
+		"@langchain/core": "^1.0.4",
 		"@types/node": "^20.0.0",
 		"@types/ws": "^8.5.0",
 		"dotenv": "^17.2.3",

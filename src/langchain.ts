@@ -2,36 +2,27 @@
  * LangChain integration for the LLP SDK.
  *
  * Import via the sub-path export:
- *   import { createLLPToolMiddleware } from 'llpsdk/langchain';
+ *   import { LLPAnnotationMiddleware } from 'llpsdk/langchain';
  *
  * Requires `langchain` as a peer dependency.
  */
 
 import { createMiddleware } from 'langchain';
+import { z } from 'zod';
 import type { Annotater } from './annotate.js';
+import { getLLPContext } from './context.js';
 import type { TextMessage } from './message.js';
 
-// LangChain calls these methods by name at runtime.
-// We type only what we need from @langchain/core to stay dependency-light.
-interface ToolInfo {
-	name?: string;
-}
-
-interface ToolCallRequest {
-	toolCall: {
-		name: string;
-		args: unknown;
-	};
-}
-
-type ToolCallHandler = (request: ToolCallRequest) => Promise<unknown>;
-
 export interface LLPToolMiddlewareOptions {
-	name?: string;
 	onAnnotationError?: (error: unknown) => void;
 	serializeArgs?: (value: unknown) => string;
 	serializeResult?: (value: unknown) => string;
 }
+
+export const llpMiddlewareContextSchema = z.object({
+	llpMessage: z.custom<TextMessage>(),
+	llpClient: z.custom<Annotater>(),
+});
 
 function serialize(value: unknown): string {
 	try {
@@ -43,27 +34,31 @@ function serialize(value: unknown): string {
 
 /**
  * LangChain v1 middleware helper that captures tool calls and reports them
- * to the LLP platform via `annotater.annotateToolCall()`.
+ * to the LLP platform via `llpClient.annotateToolCall()`.
  *
- * Instantiate once per inbound message and pass it to `createAgent()`:
+ * Pass the LLP runtime context when invoking the agent:
  *
  * ```ts
- * client.onMessage(async (annotater, msg) => {
- *   const agent = createAgent({
- *     model,
- *     tools,
- *     middleware: [createLLPToolMiddleware(msg, annotater)],
- *   });
- *   const result = await agent.invoke({ messages });
+ * const agent = createAgent({
+ *   model,
+ *   tools,
+ *   middleware: [createLLPToolMiddleware()],
+ * });
+ *
+ * client.onMessage(async (session, msg) => {
+ *   const result = await agent.invoke(
+ *     { messages },
+ *     { context: { llpMessage: msg, llpClient: session } },
+ *   );
  *   return msg.reply(String(result.messages.at(-1)?.content ?? ''));
  * });
  * ```
  */
-export function createLLPToolMiddleware(
-	msg: TextMessage,
-	annotater: Annotater,
-	options: LLPToolMiddlewareOptions = {},
-) {
+/**
+ * @deprecated Use `LLPAnnotationMiddleware` instead. This older API requires
+ * manually passing `{ context: { llpMessage, llpClient } }` on every invoke call.
+ */
+export function createLLPToolMiddleware(options: LLPToolMiddlewareOptions = {}) {
 	const serializeArgs = options.serializeArgs ?? serialize;
 	const serializeResult = options.serializeResult ?? serialize;
 	const onAnnotationError =
@@ -71,25 +66,32 @@ export function createLLPToolMiddleware(
 		((error: unknown) => console.warn('[LLP] Failed to annotate tool call:', error));
 
 	return createMiddleware({
-		name: options.name ?? 'LLPToolCallMiddleware',
-		wrapToolCall: async (request: ToolCallRequest, handler: ToolCallHandler) => {
+		name: 'LLPToolCallMiddleware',
+		contextSchema: llpMiddlewareContextSchema,
+		wrapToolCall: async (request, handler) => {
 			const startMs = Date.now();
+			const { llpMessage, llpClient } = request.runtime.context;
 			const toolName = request.toolCall.name;
 			const parameters = serializeArgs(request.toolCall.args);
 
 			try {
 				const result = await handler(request);
-				await annotater
+				await llpClient
 					.annotateToolCall(
-						msg.toolCall(toolName, parameters, serializeResult(result), Date.now() - startMs),
+						llpMessage.toolCall(
+							toolName,
+							parameters,
+							serializeResult(result),
+							Date.now() - startMs,
+						),
 					)
 					.catch(onAnnotationError);
 				return result;
 			} catch (error) {
 				const err = error instanceof Error ? error : new Error(String(error));
-				await annotater
+				await llpClient
 					.annotateToolCall(
-						msg.toolCallException(toolName, parameters, err, Date.now() - startMs),
+						llpMessage.toolCallException(toolName, parameters, err, Date.now() - startMs),
 					)
 					.catch(onAnnotationError);
 				throw error;
@@ -98,59 +100,55 @@ export function createLLPToolMiddleware(
 	});
 }
 
+// ---------------------------------------------------------------------------
+// New API — reads context from AsyncLocalStorage automatically
+// ---------------------------------------------------------------------------
+
 /**
- * Legacy LangChain callback handler that captures tool calls and reports them
- * to the LLP platform via `annotater.annotateToolCall()`.
- *
- * Instantiate once per inbound message and pass to `chain.invoke()`:
+ * LangChain middleware that captures tool calls and reports them to the
+ * LLP platform. Context is read from AsyncLocalStorage automatically —
+ * no manual context passing needed.
  *
  * ```ts
- * client.onMessage(async (annotater, msg) => {
- *   const middleware = new LLPToolCallMiddleware(msg, annotater);
- *   const result = await chain.invoke(input, { callbacks: [middleware] });
- *   return msg.reply(result);
- * });
+ * new LLPClient(name, key, config)
+ *   .onStart(() => createAgent({
+ *     model,
+ *     tools,
+ *     middleware: [LLPAnnotationMiddleware],
+ *   }))
+ *   .onMessage(async (agent, msg) => {
+ *     const result = await agent.invoke({ messages: [...] });
+ *     return msg.reply(extractText(result));
+ *   })
+ *   .connect();
  * ```
  */
-export class LLPToolCallMiddleware {
-	private readonly pending = new Map<
-		string,
-		{ name: string; parameters: string; startMs: number }
-	>();
+export const LLPAnnotationMiddleware = createMiddleware({
+	name: 'LLPAnnotationMiddleware',
+	wrapToolCall: async (request, handler) => {
+		const startMs = Date.now();
+		const { llpMessage, llpClient } = getLLPContext();
+		const toolName = request.toolCall.name;
+		const parameters = serialize(request.toolCall.args);
 
-	constructor(
-		private readonly msg: TextMessage,
-		private readonly annotater: Annotater,
-	) {}
-
-	handleToolStart(tool: ToolInfo | null | undefined, input: unknown, runId: string): void {
-		const name = tool?.name ?? 'unknown';
-		const parameters = serialize(input);
-		this.pending.set(runId, { name, parameters, startMs: Date.now() });
-	}
-
-	handleToolEnd(output: unknown, runId: string): void {
-		const entry = this.pending.get(runId);
-		if (!entry) return;
-		this.pending.delete(runId);
-
-		const durationMs = Date.now() - entry.startMs;
-		const tc = this.msg.toolCall(entry.name, entry.parameters, serialize(output), durationMs);
-		this.annotater
-			.annotateToolCall(tc)
-			.catch((err) => console.warn('[LLP] Failed to annotate tool call:', err));
-	}
-
-	handleToolError(err: unknown, runId: string): void {
-		const entry = this.pending.get(runId);
-		if (!entry) return;
-		this.pending.delete(runId);
-
-		const durationMs = Date.now() - entry.startMs;
-		const error = err instanceof Error ? err : new Error(String(err));
-		const tc = this.msg.toolCallException(entry.name, entry.parameters, error, durationMs);
-		this.annotater
-			.annotateToolCall(tc)
-			.catch((e) => console.warn('[LLP] Failed to annotate tool call exception:', e));
-	}
-}
+		try {
+			const result = await handler(request);
+			await llpClient
+				.annotateToolCall(
+					llpMessage.toolCall(toolName, parameters, serialize(result), Date.now() - startMs),
+				)
+				.catch((error: unknown) => console.warn('[LLP] Failed to annotate tool call:', error));
+			return result;
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			await llpClient
+				.annotateToolCall(
+					llpMessage.toolCallException(toolName, parameters, err, Date.now() - startMs),
+				)
+				.catch((annotateErr: unknown) =>
+					console.warn('[LLP] Failed to annotate tool call:', annotateErr),
+				);
+			throw error;
+		}
+	},
+});
