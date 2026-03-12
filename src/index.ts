@@ -7,14 +7,12 @@ export {
 	// Legacy handler types (backward compat)
 	type MessageHandler,
 	type PresenceHandler,
-	type SessionFactory,
+	type SessionCreator,
 	type StartHandler,
 	type StopHandler,
 	type TypedLLPClient,
 	type TypedMessageHandler,
 } from './client.js';
-// Async context for middleware
-export { getLLPContext, type LLPContext, runWithLLPContext } from './context.js';
 // Error types and codes
 export {
 	AlreadyClosedError,

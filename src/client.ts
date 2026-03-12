@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { Annotater } from './annotate.js';
-import { runWithLLPContext } from './context.js';
 import {
 	AlreadyClosedError,
 	AlreadyConnectedError,
@@ -40,8 +39,8 @@ export type PresenceHandler<TSessionData = unknown> = StartHandler<TSessionData>
 // New chainable API types
 // ---------------------------------------------------------------------------
 
-export type SessionFactory<T> = () => T | Promise<T>;
-export type TypedMessageHandler<T> = (data: T, msg: TextMessage) => Promise<TextMessage>;
+export type SessionCreator<T> = () => T | Promise<T>;
+export type TypedMessageHandler<T> = (data: T, msg: TextMessage, annotater: Annotater) => Promise<TextMessage>;
 export type StopHandler<T> = (data: T) => void | Promise<void>;
 
 /**
@@ -82,7 +81,7 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 	private startHandler: StartHandler<TSessionData> | null = null;
 
 	// New API handlers
-	private startFactory: SessionFactory<unknown> | null = null;
+	private sessionCreator: SessionCreator<unknown> | null = null;
 	private typedMessageHandler: TypedMessageHandler<unknown> | null = null;
 	private stopHandler: StopHandler<unknown> | null = null;
 
@@ -102,15 +101,12 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 	// -------------------------------------------------------------------
 
 	/**
-	 * Register a factory that creates session data for each new user session.
+	 * Register a callback that creates session data for each new user session.
 	 * The SDK calls this automatically when a user becomes available.
-	 *
-	 * Returns a typed client for chaining — the generic is inferred from
-	 * the factory return type.
 	 *
 	 * ```ts
 	 * new LLPClient(name, key, config)
-	 *   .onStart(() => createAgent({ model, tools, middleware: [LLPAnnotationMiddleware] }))
+	 *   .onStart(() => createAgent({ model, tools, middleware: [createLLPToolMiddleware()] }))
 	 *   .onMessage(async (agent, msg) => {
 	 *     const result = await agent.invoke({ messages: [new HumanMessage(msg.prompt)] });
 	 *     return msg.reply(extractText(result));
@@ -118,29 +114,29 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 	 *   .connect();
 	 * ```
 	 */
-	onStart<T>(factory: SessionFactory<T>): TypedLLPClient<T>;
-	/** @deprecated Use the factory overload: `onStart(() => createAgent(...))` */
+	onStart<T>(creator: SessionCreator<T>): TypedLLPClient<T>;
+	/** @deprecated Use the new overload: `onStart(() => createAgent(...))` */
 	onStart(handler: StartHandler<TSessionData>): void;
 	onStart<T>(
-		factoryOrHandler: SessionFactory<T> | StartHandler<TSessionData>,
+		creatorOrHandler: SessionCreator<T> | StartHandler<TSessionData>,
 	): TypedLLPClient<T> | undefined {
 		if (this.status !== ConnectionStatus.Disconnected && this.status !== ConnectionStatus.Closed) {
 			throw new AlreadyConnectedError('Must set onStart callback before connecting');
 		}
 
-		// Distinguish by arity: factory is 0-arg, legacy handler is 2-arg
-		if (factoryOrHandler.length === 0) {
-			this.startFactory = factoryOrHandler as SessionFactory<unknown>;
+		// Distinguish by arity: creator is 0-arg, legacy handler is 2-arg
+		if (creatorOrHandler.length === 0) {
+			this.sessionCreator = creatorOrHandler as SessionCreator<unknown>;
 			return this as unknown as TypedLLPClient<T>;
 		}
 
-		this.startHandler = factoryOrHandler as StartHandler<TSessionData>;
+		this.startHandler = creatorOrHandler as StartHandler<TSessionData>;
 		return undefined;
 	}
 
 	/**
 	 * Register a message handler (new API — called via chaining after onStart).
-	 * The first argument is the session data created by the onStart factory.
+	 * The first argument is the session data created by onStart.
 	 */
 	onMessage(handler: TypedMessageHandler<TSessionData>): TypedLLPClient<TSessionData>;
 	/** @deprecated Use the new API: `onStart(...).onMessage((data, msg) => ...)` */
@@ -152,8 +148,8 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 			throw new AlreadyConnectedError('Must set onMessage callback before connecting');
 		}
 
-		// If startFactory is set, we're in the new API path
-		if (this.startFactory) {
+		// If sessionCreator is set, we're in the new API path
+		if (this.sessionCreator) {
 			this.typedMessageHandler = handler as TypedMessageHandler<unknown>;
 			return this as unknown as TypedLLPClient<TSessionData>;
 		}
@@ -405,18 +401,17 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 
 		const session = this.getOrCreateSession(msg.sender);
 
-		// New API path: typed message handler with AsyncLocalStorage context
+		// New API path: typed message handler
 		if (this.typedMessageHandler) {
 			try {
+				console.log(`[message] received from sender=${msg.sender} id=${msg.id}`);
+				await session.waitForData();
 				const data = session.data;
 				if (!data) {
-					console.error(`No session data initialized for sender ${session.id}`);
+					console.error(`[message] no session data for sender=${msg.sender} — was presence received?`);
 					return;
 				}
-				const handler = this.typedMessageHandler;
-				const reply = await runWithLLPContext({ llpMessage: msg, llpClient: session }, () =>
-					handler(data, msg),
-				);
+				const reply = await this.typedMessageHandler(data, msg, session);
 				await this.sendAsyncMessage(reply);
 			} catch (err) {
 				console.error('Error in message handler:', err);
@@ -437,20 +432,26 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 
 	private handlePresenceMessage(json: Record<string, unknown>): void {
 		const presence = PresenceMessage.decode(json);
+		console.log(`[presence] sender=${presence.sender} status=${presence.status}`);
 		const session = this.getOrCreateSession(presence.sender);
 
-		// New API path: factory + stop handler
-		if (this.startFactory) {
+		// New API path: session creator + stop handler
+		if (this.sessionCreator) {
 			if (presence.status === PresenceStatus.Available) {
 				session.clearData();
-				Promise.resolve(this.startFactory())
+				Promise.resolve(this.sessionCreator())
 					.then((data) => {
 						if (data !== undefined) {
 							session.setData(data as TSessionData);
+							console.log(`[presence] session ready for sender=${presence.sender}`);
+						} else {
+							console.warn(`[presence] onStart returned undefined for sender=${presence.sender}`);
+							session.failInit(new Error('onStart returned undefined'));
 						}
 					})
 					.catch((err) => {
-						console.error('Error in onStart factory:', err);
+						console.error(`[presence] onStart failed for sender=${presence.sender}:`, err);
+						session.failInit(err instanceof Error ? err : new Error(String(err)));
 					});
 			} else if (presence.status === PresenceStatus.Unavailable) {
 				const data = session.data;

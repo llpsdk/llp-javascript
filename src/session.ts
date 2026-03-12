@@ -2,8 +2,8 @@ import type { Annotater } from './annotate.js';
 import type { ToolCall } from './message.js';
 
 export class LLPSession<TData = unknown> implements Annotater {
-	private readonly values = new Map<string, unknown>();
 	private sessionData: TData | undefined;
+	private dataReady: { promise: Promise<void>; resolve: () => void; reject: (err: Error) => void } | null = null;
 
 	constructor(
 		public readonly id: string,
@@ -20,26 +20,35 @@ export class LLPSession<TData = unknown> implements Annotater {
 
 	setData(value: TData): void {
 		this.sessionData = value;
+		this.dataReady?.resolve();
+		this.dataReady = null;
+	}
+
+	failInit(err: Error): void {
+		this.dataReady?.reject(err);
+		this.dataReady = null;
 	}
 
 	clearData(): void {
 		this.sessionData = undefined;
 	}
 
-	get<T>(key: string): T | undefined {
-		return this.values.get(key) as T | undefined;
-	}
-
-	set<T>(key: string, value: T): void {
-		this.values.set(key, value);
-	}
-
-	delete(key: string): boolean {
-		return this.values.delete(key);
+	async waitForData(): Promise<void> {
+		if (this.sessionData !== undefined) return;
+		if (!this.dataReady) {
+			let resolve!: () => void;
+			let reject!: (err: Error) => void;
+			const promise = new Promise<void>((res, rej) => {
+				resolve = res;
+				reject = rej;
+			});
+			this.dataReady = { promise, resolve, reject };
+		}
+		await this.dataReady.promise;
 	}
 
 	clear(): void {
 		this.sessionData = undefined;
-		this.values.clear();
+		this.dataReady = null;
 	}
 }
