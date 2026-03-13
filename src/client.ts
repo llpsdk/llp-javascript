@@ -40,7 +40,11 @@ export type PresenceHandler<TSessionData = unknown> = StartHandler<TSessionData>
 // ---------------------------------------------------------------------------
 
 export type SessionCreator<T> = () => T | Promise<T>;
-export type TypedMessageHandler<T> = (data: T, msg: TextMessage, annotater: Annotater) => Promise<TextMessage>;
+export type TypedMessageHandler<T> = (
+	data: T,
+	msg: TextMessage,
+	annotater: Annotater,
+) => Promise<TextMessage>;
 export type StopHandler<T> = (data: T) => void | Promise<void>;
 
 /**
@@ -408,7 +412,9 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 				await session.waitForData();
 				const data = session.data;
 				if (!data) {
-					console.error(`[message] no session data for sender=${msg.sender} — was presence received?`);
+					console.error(
+						`[message] no session data for sender=${msg.sender} — was presence received?`,
+					);
 					return;
 				}
 				const reply = await this.typedMessageHandler(data, msg, session);

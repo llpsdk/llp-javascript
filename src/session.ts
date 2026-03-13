@@ -3,7 +3,11 @@ import type { ToolCall } from './message.js';
 
 export class LLPSession<TData = unknown> implements Annotater {
 	private sessionData: TData | undefined;
-	private dataReady: { promise: Promise<void>; resolve: () => void; reject: (err: Error) => void } | null = null;
+	private dataReady: {
+		promise: Promise<void>;
+		resolve: () => void;
+		reject: (err: Error) => void;
+	} | null = null;
 
 	constructor(
 		public readonly id: string,
