@@ -10,9 +10,10 @@ import {
 	PlatformError,
 	TimeoutError,
 } from './errors.js';
-import { PresenceMessage, TextMessage, type ToolCall } from './message.js';
+import { PresenceMessage, TextMessage } from './message.js';
 import { ConnectionStatus, PresenceStatus } from './presence.js';
 import { LLPSession } from './session.js';
+import type { ToolCall } from './tool_call.js';
 
 export interface LLPClientConfig {
 	readonly url?: string; // Default: wss://llphq.com/agent/websocket

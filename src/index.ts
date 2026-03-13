@@ -26,7 +26,7 @@ export {
 	TimeoutError,
 } from './errors.js';
 // Message types
-export { PresenceMessage, TextMessage, ToolCall } from './message.js';
+export { PresenceMessage, TextMessage } from './message.js';
 // Status enums
 export {
 	ConnectionStatus,
@@ -35,3 +35,4 @@ export {
 	type PresenceStatus as PresenceStatusType,
 } from './presence.js';
 export { LLPSession, LLPSession as Session } from './session.js';
+export { ToolCall } from './tool_call.js';

@@ -1,5 +1,5 @@
 import type { Annotater } from './annotate.js';
-import type { ToolCall } from './message.js';
+import type { ToolCall } from './tool_call.js';
 
 export class LLPSession<TData = unknown> implements Annotater {
 	private sessionData: TData | undefined;
