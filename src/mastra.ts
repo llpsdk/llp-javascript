@@ -107,9 +107,7 @@ export function wrapWithLLPAnnotation<TInput, TOutput>(
 		} catch (err) {
 			const e = err instanceof Error ? err : new Error(String(err));
 			llpAnnotater
-				.annotateToolCall(
-					llpMessage.toolCallException(toolId, params, e, Date.now() - startMs),
-				)
+				.annotateToolCall(llpMessage.toolCallException(toolId, params, e, Date.now() - startMs))
 				.catch(onAnnotationError);
 			throw err;
 		}
