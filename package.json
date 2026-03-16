@@ -13,6 +13,10 @@
 		"./langchain": {
 			"import": "./dist/langchain.js",
 			"types": "./dist/langchain.d.ts"
+		},
+		"./mastra": {
+			"import": "./dist/mastra.js",
+			"types": "./dist/mastra.d.ts"
 		}
 	},
 	"peerDependencies": {
