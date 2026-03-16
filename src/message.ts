@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { TextMessageEmptyError, TextMessageReplyError } from './errors.js';
 import type { PresenceStatus } from './presence.js';
+import { ToolCall } from './tool_call.js';
 
 export class TextMessage {
 	readonly id: string;
@@ -52,6 +53,38 @@ export class TextMessage {
 
 	hasAttachment(): boolean {
 		return this.attachment !== null && this.attachment !== '';
+	}
+
+	/**
+	 * Factory for a successful tool call record.
+	 * Stamps the correct message ID and recipient so the platform
+	 * can correlate this tool call with the originating message.
+	 */
+	toolCall(name: string, parameters: string, result: string, durationMs: number): ToolCall {
+		return new ToolCall({
+			id: this.id,
+			recipient: this.sender,
+			name,
+			parameters,
+			result,
+			threwException: false,
+			durationMs,
+		});
+	}
+
+	/**
+	 * Factory for a failed tool call record.
+	 */
+	toolCallException(name: string, parameters: string, err: Error, durationMs: number): ToolCall {
+		return new ToolCall({
+			id: this.id,
+			recipient: this.sender,
+			name,
+			parameters,
+			result: err.message,
+			threwException: true,
+			durationMs,
+		});
 	}
 
 	static decode(json: Record<string, unknown>): TextMessage {

@@ -26,7 +26,7 @@ describe('LLPClient Integration Tests', () => {
 		close: ReturnType<typeof vi.fn>;
 		readyState: number;
 	};
-	let client: LLPClient;
+	let client: LLPClient<string>;
 
 	beforeEach(async () => {
 		vi.clearAllMocks();
@@ -49,7 +49,7 @@ describe('LLPClient Integration Tests', () => {
 			return mockWs as unknown as WebSocket;
 		});
 
-		client = new LLPClient('test-agent', 'test-key');
+		client = new LLPClient<string>('test-agent', 'test-key');
 	});
 
 	async function connectClient(): Promise<void> {
@@ -113,7 +113,8 @@ describe('LLPClient Integration Tests', () => {
 
 		it('should handle incoming messages and send replies', async () => {
 			const replies: TextMessage[] = [];
-			client.onMessage(async (msg: TextMessage) => {
+			client.onMessage(async (session, msg: TextMessage) => {
+				expect(session.id).toBe('alice');
 				const reply = msg.reply(`Echo: ${msg.prompt}`);
 				replies.push(reply);
 				return reply;
@@ -123,7 +124,13 @@ describe('LLPClient Integration Tests', () => {
 			const messageHandler = mockWs.on.mock.calls.find((call) => call[0] === 'message')?.[1];
 
 			// Simulate incoming message
-			const incomingMsg = new TextMessage('test-agent', 'Hello!', 'msg-incoming', 'alice');
+			const incomingMsg = new TextMessage(
+				'test-agent',
+				'Hello!',
+				undefined,
+				'msg-incoming',
+				'alice',
+			);
 
 			messageHandler?.(Buffer.from(incomingMsg.encode()));
 
@@ -147,9 +154,9 @@ describe('LLPClient Integration Tests', () => {
 
 	describe('Presence handling', () => {
 		it('should receive and process presence updates', async () => {
-			const presenceUpdates: PresenceMessage[] = [];
-			client.onPresence((msg: PresenceMessage) => {
-				presenceUpdates.push(msg);
+			const presenceUpdates: Array<{ sessionId: string; msg: PresenceMessage }> = [];
+			client.onStart((session, msg: PresenceMessage) => {
+				presenceUpdates.push({ sessionId: session.id, msg });
 			});
 
 			await connectClient();
@@ -172,15 +179,17 @@ describe('LLPClient Integration Tests', () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			expect(presenceUpdates).toHaveLength(1);
-			expect(presenceUpdates[0]?.sender).toBe('alice');
-			expect(presenceUpdates[0]?.status).toBe(PresenceStatus.Available);
+			expect(presenceUpdates[0]?.sessionId).toBe('alice');
+			expect(presenceUpdates[0]?.msg.sender).toBe('alice');
+			expect(presenceUpdates[0]?.msg.status).toBe(PresenceStatus.Available);
 		});
 
 		it('should handle async presence handlers', async () => {
 			let handlerCalled = false;
-			client.onPresence(async (msg: PresenceMessage) => {
+			client.onStart(async (session, msg: PresenceMessage) => {
 				await new Promise((resolve) => setTimeout(resolve, 5));
 				handlerCalled = true;
+				expect(session.id).toBe('bob');
 				expect(msg.sender).toBe('bob');
 			});
 
@@ -203,6 +212,73 @@ describe('LLPClient Integration Tests', () => {
 			await new Promise((resolve) => setTimeout(resolve, 20));
 
 			expect(handlerCalled).toBe(true);
+		});
+
+		it('should isolate session state by sender and clear it on unavailable', async () => {
+			const seenValues: Array<string | undefined> = [];
+
+			client.onStart((_session, msg: PresenceMessage) => {
+				if (msg.status === PresenceStatus.Available) {
+					return `agent-for-${msg.sender}`;
+				}
+			});
+
+			client.onMessage(async (session, msg: TextMessage) => {
+				seenValues.push(session.data);
+				return msg.reply(`Ack: ${msg.prompt}`);
+			});
+
+			await connectClient();
+
+			const messageHandler = mockWs.on.mock.calls.find((call) => call[0] === 'message')?.[1];
+
+			const alicePresence = JSON.stringify({
+				type: 'presence',
+				id: 'pres-alice',
+				from: 'alice',
+				data: { status: 'available' },
+			});
+			const bobPresence = JSON.stringify({
+				type: 'presence',
+				id: 'pres-bob',
+				from: 'bob',
+				data: { status: 'available' },
+			});
+			messageHandler?.(Buffer.from(alicePresence));
+			messageHandler?.(Buffer.from(bobPresence));
+
+			// Wait for presence handler microtasks (setData) to resolve
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			const aliceMsg = new TextMessage('test-agent', 'hello', undefined, 'msg-alice', 'alice');
+			const bobMsg = new TextMessage('test-agent', 'hi', undefined, 'msg-bob', 'bob');
+			messageHandler?.(Buffer.from(aliceMsg.encode()));
+			messageHandler?.(Buffer.from(bobMsg.encode()));
+
+			await new Promise((resolve) => setTimeout(resolve, 20));
+
+			expect(seenValues).toEqual(['agent-for-alice', 'agent-for-bob']);
+
+			const aliceUnavailable = JSON.stringify({
+				type: 'presence',
+				id: 'pres-alice-off',
+				from: 'alice',
+				data: { status: 'unavailable' },
+			});
+			messageHandler?.(Buffer.from(aliceUnavailable));
+			await new Promise((resolve) => setTimeout(resolve, 20));
+
+			const aliceMsgAfter = new TextMessage(
+				'test-agent',
+				'hello again',
+				undefined,
+				'msg-alice-2',
+				'alice',
+			);
+			messageHandler?.(Buffer.from(aliceMsgAfter.encode()));
+			await new Promise((resolve) => setTimeout(resolve, 20));
+
+			expect(seenValues).toEqual(['agent-for-alice', 'agent-for-bob', undefined]);
 		});
 	});
 
