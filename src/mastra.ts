@@ -4,28 +4,28 @@
  * Import via the sub-path export:
  *   import { wrapWithLLPAnnotation, type LLPMastraContext } from 'llpsdk/mastra';
  *
- * Does not require @mastra/core as a dependency — uses duck typing for RuntimeContext.
+ * Does not require @mastra/core as a dependency — uses duck typing for RequestContext.
  *
- * Usage:
+ * Usage (Mastra v1.x):
  *
  * ```ts
  * import { wrapWithLLPAnnotation, type LLPMastraContext } from 'llpsdk/mastra';
- * import { RuntimeContext } from '@mastra/core/runtime-context';
+ * import { RequestContext } from '@mastra/core/request-context';
  * import { createTool } from '@mastra/core/tools';
  *
  * const myTool = createTool({
  *   id: 'my_tool',
  *   inputSchema: z.object({ query: z.string() }),
- *   execute: wrapWithLLPAnnotation('my_tool', async ({ context }) => {
- *     return await doSomething(context.query);
+ *   execute: wrapWithLLPAnnotation('my_tool', async (inputData) => {
+ *     return await doSomething(inputData.query);
  *   }),
  * });
  *
  * // In handleMessage:
- * const runtimeContext = new RuntimeContext<LLPMastraContext>();
- * runtimeContext.set('llpMessage', message);
- * runtimeContext.set('llpAnnotater', annotater);
- * const result = await agent.generate(prompt, { runtimeContext });
+ * const requestContext = new RequestContext<LLPMastraContext>();
+ * requestContext.set('llpMessage', message);
+ * requestContext.set('llpAnnotater', annotater);
+ * const result = await agent.generate(prompt, { requestContext });
  * ```
  */
 
@@ -35,8 +35,8 @@ import type { TextMessage } from './message.js';
 /**
  * The runtime context type for LLP-connected Mastra agents.
  *
- * Use as the type parameter for RuntimeContext:
- *   new RuntimeContext<LLPMastraContext>()
+ * Use as the type parameter for RequestContext:
+ *   new RequestContext<LLPMastraContext>()
  */
 export type LLPMastraContext = {
 	llpMessage: TextMessage;
@@ -44,12 +44,20 @@ export type LLPMastraContext = {
 };
 
 /**
- * Minimal interface that RuntimeContext<LLPMastraContext> satisfies.
+ * Minimal interface that RequestContext<LLPMastraContext> satisfies.
  * Used internally so this module does not depend on @mastra/core.
  */
-interface LLPMastraRuntimeContextLike {
+interface LLPMastraRequestContextLike {
 	get(key: 'llpMessage'): TextMessage;
 	get(key: 'llpAnnotater'): Annotater;
+}
+
+/**
+ * Minimal duck-type for Mastra v1.x ToolExecutionContext.
+ * Only requires the requestContext field we actually use.
+ */
+interface MastraToolExecutionContextLike {
+	requestContext?: LLPMastraRequestContextLike;
 }
 
 export interface LLPAnnotationOptions {
@@ -76,39 +84,44 @@ function serialize(value: unknown): string {
  * error swallowing — the Mastra equivalent of createLLPToolMiddleware() for
  * LangChain.
  *
- * The returned function is compatible with Mastra's createTool execute signature.
- * The tool's runtimeContext must be a RuntimeContext<LLPMastraContext>.
+ * Compatible with Mastra v1.x createTool execute signature: (inputData, context) => Promise<TOutput>
+ * The tool's requestContext must be a RequestContext<LLPMastraContext>.
  */
 export function wrapWithLLPAnnotation<TInput, TOutput>(
 	toolId: string,
-	execute: (args: { context: TInput }) => Promise<TOutput>,
+	execute: (inputData: TInput) => Promise<TOutput>,
 	options: LLPAnnotationOptions = {},
-): (args: { context: TInput; runtimeContext: LLPMastraRuntimeContextLike }) => Promise<TOutput> {
+): (inputData: TInput, context: MastraToolExecutionContextLike) => Promise<TOutput> {
 	const serializeInput = options.serializeInput ?? serialize;
 	const serializeOutput = options.serializeOutput ?? serialize;
 	const onAnnotationError =
 		options.onAnnotationError ??
 		((error: unknown) => console.warn('[LLP] Failed to annotate tool call:', error));
 
-	return async ({ context, runtimeContext }) => {
+	return async (inputData, context) => {
 		const startMs = Date.now();
-		const llpMessage = runtimeContext.get('llpMessage');
-		const llpAnnotater = runtimeContext.get('llpAnnotater');
-		const params = serializeInput(context);
+		const requestContext = context.requestContext;
+		const llpMessage = requestContext?.get('llpMessage');
+		const llpAnnotater = requestContext?.get('llpAnnotater');
+		const params = serializeInput(inputData);
 
 		try {
-			const result = await execute({ context });
-			llpAnnotater
-				.annotateToolCall(
-					llpMessage.toolCall(toolId, params, serializeOutput(result), Date.now() - startMs),
-				)
-				.catch(onAnnotationError);
+			const result = await execute(inputData);
+			if (llpMessage && llpAnnotater) {
+				llpAnnotater
+					.annotateToolCall(
+						llpMessage.toolCall(toolId, params, serializeOutput(result), Date.now() - startMs),
+					)
+					.catch(onAnnotationError);
+			}
 			return result;
 		} catch (err) {
-			const e = err instanceof Error ? err : new Error(String(err));
-			llpAnnotater
-				.annotateToolCall(llpMessage.toolCallException(toolId, params, e, Date.now() - startMs))
-				.catch(onAnnotationError);
+			if (llpMessage && llpAnnotater) {
+				const e = err instanceof Error ? err : new Error(String(err));
+				llpAnnotater
+					.annotateToolCall(llpMessage.toolCallException(toolId, params, e, Date.now() - startMs))
+					.catch(onAnnotationError);
+			}
 			throw err;
 		}
 	};
