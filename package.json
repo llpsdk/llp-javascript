@@ -60,8 +60,7 @@
 		"lint": "biome check .",
 		"format": "biome format --write .",
 		"formatcheck": "biome format .",
-		"typecheck": "tsc --noEmit",
-		"example": "tsx examples/simple-agent.ts"
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"ws": "^8.18.0",

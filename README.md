@@ -43,6 +43,11 @@ async function main() {
 main();
 ```
 
+## Examples
+
+- `examples/simple-agent` is a standalone example package containing the literal Python `simple_agent.py` port
+- `examples/mastra-weather-agent` is a standalone Mastra example package with its own `package.json`
+
 ## LangChain Tool Call Capture
 
 If your LangChain agent uses tools, the SDK can automatically annotate those
