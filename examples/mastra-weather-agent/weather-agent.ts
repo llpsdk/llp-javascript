@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { createTool } from '@mastra/core/tools';
@@ -13,37 +13,13 @@ const __dirname = dirname(__filename);
 config({ path: join(__dirname, '.env') });
 
 const SYSTEM_PROMPT = `
-You are a weather assistant that helps with current weather questions.
-You MUST return ONLY valid JSON.
-
-Return JSON matching ONE of these shapes:
-
-For weather questions:
-{
-  "type": "forecast",
-  "city": "supported city name",
-  "summary": "short answer to the user's question",
-  "conditions": "brief conditions",
-  "temperature_f": 72,
-  "advisory": "short practical advice"
-}
-
-For capability questions:
-{
-  "type": "capabilities"
-}
-
-For unsupported or out-of-domain questions:
-{
-  "type": "decline",
-  "reason": "brief explanation"
-}
+You are a helpful meteorologist that gives succinct responses regarding the weather for various American cities.
 
 Important rules:
 1. Use the get_weather tool for every weather question about a supported city.
 2. Supported cities are New York, Los Angeles, Chicago, Miami, Seattle, Denver, San Francisco, Austin, Boston, and London.
-3. If the city is unsupported, return type "decline" and mention the supported cities.
-4. If the question is not about weather, return type "decline".
+3. If the city is unsupported, decline and mention the supported cities.
+4. If the question is not about weather, decline.
 5. Keep summaries concise and practical.
 `;
 
@@ -116,13 +92,6 @@ const weatherData: Record<
 	},
 };
 
-const weatherToolResponseSchema = z.object({
-	city: z.enum(supportedCities),
-	conditions: z.string(),
-	temperature_f: z.number(),
-	advisory: z.string(),
-});
-
 const weatherResponseSchema = z.union([
 	z.object({
 		type: z.literal('forecast'),
@@ -141,8 +110,8 @@ const weatherResponseSchema = z.union([
 	}),
 ]);
 
-type WeatherToolResponse = z.infer<typeof weatherToolResponseSchema>;
 type WeatherResponse = z.infer<typeof weatherResponseSchema>;
+type WeatherToolResult = { city: string; conditions: string; temperature_f: number; advisory: string };
 type WeatherAgent = ReturnType<typeof createWeatherAgent>;
 
 const getWeatherTool = createTool({
@@ -151,16 +120,10 @@ const getWeatherTool = createTool({
 	inputSchema: z.object({
 		city: z.enum(supportedCities),
 	}),
-	execute: wrapWithLLPAnnotation<{ city: (typeof supportedCities)[number] }, WeatherToolResponse>(
+	execute: wrapWithLLPAnnotation<{ city: (typeof supportedCities)[number] }, WeatherToolResult>(
 		'get_weather',
 		async (inputData) => {
-			const weather = weatherData[inputData.city];
-			return {
-				city: inputData.city,
-				conditions: weather.conditions,
-				temperature_f: weather.temperature_f,
-				advisory: weather.advisory,
-			};
+			return { city: inputData.city, ...weatherData[inputData.city] };
 		},
 	),
 });
@@ -173,24 +136,6 @@ function createWeatherAgent(model: string) {
 		model,
 		tools: { get_weather: getWeatherTool },
 	});
-}
-
-function buildPrompt(message: TextMessage): string {
-	return `${message.prompt}
-
-Return ONLY valid JSON matching the required schema.`;
-}
-
-function extractJson(text: string): string {
-	const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-	if (codeBlock) {
-		return codeBlock[1].trim();
-	}
-	return text.trim();
-}
-
-function parseResponse(text: string): WeatherResponse {
-	return weatherResponseSchema.parse(JSON.parse(extractJson(text)) as unknown);
 }
 
 function formatCapabilities(): string {
@@ -215,8 +160,11 @@ async function handleMessage(
 	requestContext.set('llpAnnotater', annotater);
 
 	try {
-		const result = await agent.generate(buildPrompt(message), { requestContext });
-		const response = parseResponse(result.text);
+		const result = await agent.generate(message.prompt, {
+			requestContext,
+			output: weatherResponseSchema,
+		});
+		const response = result.object as WeatherResponse;
 
 		if (response.type === 'capabilities') {
 			return formatCapabilities();
@@ -282,9 +230,4 @@ async function main(): Promise<void> {
 	}
 }
 
-const isMainModule =
-	process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
-
-if (isMainModule) {
-	void main();
-}
+void main();
