@@ -111,7 +111,12 @@ const weatherResponseSchema = z.union([
 ]);
 
 type WeatherResponse = z.infer<typeof weatherResponseSchema>;
-type WeatherToolResult = { city: string; conditions: string; temperature_f: number; advisory: string };
+type WeatherToolResult = {
+	city: string;
+	conditions: string;
+	temperature_f: number;
+	advisory: string;
+};
 type WeatherAgent = ReturnType<typeof createWeatherAgent>;
 
 const getWeatherTool = createTool({
