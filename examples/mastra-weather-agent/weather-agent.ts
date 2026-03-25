@@ -145,7 +145,7 @@ async function handleMessage(
 async function main(): Promise<void> {
 	const agentName = process.env.AGENT_NAME ?? 'mastra-weather-agent';
 	const apiKey = process.env.LLP_API_KEY ?? '';
-	const model = process.env.MODEL_NAME ?? 'ollama-cloud/gpt-oss:120b'
+	const model = process.env.MODEL_NAME ?? 'ollama-cloud/gpt-oss:120b';
 
 	if (!apiKey) {
 		throw new Error('LLP_API_KEY env var is not defined');
