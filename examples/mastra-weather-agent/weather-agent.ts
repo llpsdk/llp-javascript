@@ -4,7 +4,7 @@ import { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { createTool } from '@mastra/core/tools';
 import { config } from 'dotenv';
-import { type Annotater, LLPClient, type LLPClientConfig, type TextMessage } from 'llpsdk';
+import { type Annotater, LLPClient, type TextMessage } from 'llpsdk';
 import { type LLPMastraContext, wrapWithLLPAnnotation } from 'llpsdk/mastra';
 import * as z from 'zod';
 
@@ -134,7 +134,8 @@ async function handleMessage(
 	requestContext.set('llpAnnotater', annotater);
 
 	try {
-		return await agent.generate(message.prompt, { requestContext });
+		const result = await agent.generate(message.prompt, { requestContext });
+		return result.text;
 	} catch (error) {
 		console.error('Agent execution failed:', error);
 		return "I'm sorry, I hit an error while handling that weather request.";
@@ -144,22 +145,13 @@ async function handleMessage(
 async function main(): Promise<void> {
 	const agentName = process.env.AGENT_NAME ?? 'mastra-weather-agent';
 	const apiKey = process.env.LLP_API_KEY ?? '';
-	const model = process.env.MODEL_NAME ?? 'ollama/llama3.1';
-
-	if (!process.env.LLP_URL) {
-		throw new Error('LLP_URL env var is not defined');
-	}
+	const model = process.env.MODEL_NAME ?? 'ollama-cloud/gpt-oss:120b'
 
 	if (!apiKey) {
 		throw new Error('LLP_API_KEY env var is not defined');
 	}
 
-	const llpConfig: LLPClientConfig = {
-		url: process.env.LLP_URL,
-		responseTimeout: 600_000,
-	};
-
-	const client = new LLPClient(agentName, apiKey, llpConfig)
+	const client = new LLPClient(agentName, apiKey)
 		.onStart(() => createWeatherAgent(model))
 		.onMessage(async (agent, msg, annotater) => {
 			const response = await handleMessage(agent, msg, annotater);
