@@ -92,25 +92,6 @@ const weatherData: Record<
 	},
 };
 
-const weatherResponseSchema = z.union([
-	z.object({
-		type: z.literal('forecast'),
-		city: z.enum(supportedCities),
-		summary: z.string(),
-		conditions: z.string(),
-		temperature_f: z.number(),
-		advisory: z.string(),
-	}),
-	z.object({
-		type: z.literal('capabilities'),
-	}),
-	z.object({
-		type: z.literal('decline'),
-		reason: z.string(),
-	}),
-]);
-
-type WeatherResponse = z.infer<typeof weatherResponseSchema>;
 type WeatherToolResult = {
 	city: string;
 	conditions: string;
@@ -143,18 +124,6 @@ function createWeatherAgent(model: string) {
 	});
 }
 
-function formatCapabilities(): string {
-	return `I can help with current weather questions for these cities: ${supportedCities.join(', ')}.`;
-}
-
-function formatForecast(response: Extract<WeatherResponse, { type: 'forecast' }>): string {
-	return `${response.city}: ${response.summary}
-
-Conditions: ${response.conditions}
-Temperature: ${response.temperature_f}°F
-Advice: ${response.advisory}`;
-}
-
 async function handleMessage(
 	agent: WeatherAgent,
 	message: TextMessage,
@@ -165,21 +134,7 @@ async function handleMessage(
 	requestContext.set('llpAnnotater', annotater);
 
 	try {
-		const result = await agent.generate(message.prompt, {
-			requestContext,
-			output: weatherResponseSchema,
-		});
-		const response = result.object as WeatherResponse;
-
-		if (response.type === 'capabilities') {
-			return formatCapabilities();
-		}
-
-		if (response.type === 'decline') {
-			return response.reason;
-		}
-
-		return formatForecast(response);
+		return await agent.generate(message.prompt, { requestContext });
 	} catch (error) {
 		console.error('Agent execution failed:', error);
 		return "I'm sorry, I hit an error while handling that weather request.";
@@ -213,16 +168,6 @@ async function main(): Promise<void> {
 		.onStop(() => {
 			console.log('session ended');
 		});
-
-	const shutdown = async () => {
-		console.log('\nShutting down...');
-		await client.close();
-		console.log('Disconnected');
-		process.exit(0);
-	};
-
-	process.on('SIGINT', shutdown);
-	process.on('SIGTERM', shutdown);
 
 	try {
 		console.log(`Mastra weather agent initialized model=${model}`);
