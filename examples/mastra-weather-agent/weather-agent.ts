@@ -146,12 +146,13 @@ async function main(): Promise<void> {
 	const agentName = process.env.AGENT_NAME ?? 'mastra-weather-agent';
 	const apiKey = process.env.LLP_API_KEY ?? '';
 	const model = process.env.MODEL_NAME ?? 'ollama-cloud/gpt-oss:120b';
+	const platformUrl = process.env.LLP_URL;
 
 	if (!apiKey) {
 		throw new Error('LLP_API_KEY env var is not defined');
 	}
 
-	const client = new LLPClient(agentName, apiKey)
+	const client = new LLPClient(agentName, apiKey, { url: platformUrl })
 		.onStart(() => createWeatherAgent(model))
 		.onMessage(async (agent, msg, annotater) => {
 			const response = await handleMessage(agent, msg, annotater);
