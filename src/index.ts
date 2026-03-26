@@ -4,14 +4,10 @@ export type { Annotater } from './annotate.js';
 export {
 	LLPClient,
 	type LLPClientConfig,
-	// Legacy handler types (backward compat)
 	type MessageHandler,
-	type PresenceHandler,
 	type SessionCreator,
-	type StartHandler,
 	type StopHandler,
 	type TypedLLPClient,
-	type TypedMessageHandler,
 } from './client.js';
 // Error types and codes
 export {

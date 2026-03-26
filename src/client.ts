@@ -5,8 +5,8 @@ import {
 	AlreadyClosedError,
 	AlreadyConnectedError,
 	type ErrorCode,
+	MessageHandlerNotSetError,
 	NotAuthenticatedError,
-	NotConnectedError,
 	PlatformError,
 	TimeoutError,
 } from './errors.js';
@@ -22,27 +22,9 @@ export interface LLPClientConfig {
 	readonly maxQueueSize?: number; // Default: 32
 }
 
-// ---------------------------------------------------------------------------
-// Legacy handler types (backward compat)
-// ---------------------------------------------------------------------------
-
-export type MessageHandler<TSessionData = unknown> = (
-	session: LLPSession<TSessionData>,
-	msg: TextMessage,
-) => Promise<TextMessage>;
-export type StartHandler<TSessionData = unknown> = (
-	session: LLPSession<TSessionData>,
-	msg: PresenceMessage,
-) => TSessionData | undefined | Promise<TSessionData | undefined>;
-export type PresenceHandler<TSessionData = unknown> = StartHandler<TSessionData>;
-
-// ---------------------------------------------------------------------------
-// New chainable API types
-// ---------------------------------------------------------------------------
-
 export type SessionCreator<T> = () => T | Promise<T>;
-export type TypedMessageHandler<T> = (
-	data: T,
+export type MessageHandler<T> = (
+	agent: T,
 	msg: TextMessage,
 	annotater: Annotater,
 ) => Promise<TextMessage>;
@@ -53,15 +35,13 @@ export type StopHandler<T> = (data: T) => void | Promise<void>;
  * The generic `T` is inferred from the factory return type.
  */
 export interface TypedLLPClient<T> {
-	onMessage(handler: TypedMessageHandler<T>): TypedLLPClient<T>;
+	onMessage(handler: MessageHandler<T>): TypedLLPClient<T>;
 	onStop(handler: StopHandler<T>): TypedLLPClient<T>;
 	connect(timeout?: number): Promise<void>;
 	close(): Promise<void>;
 	getStatus(): ConnectionStatus;
 	getSessionId(): string | null;
 	getPresence(): PresenceStatus;
-	sendMessage(msg: TextMessage, timeout?: number): Promise<TextMessage>;
-	sendAsyncMessage(msg: TextMessage): Promise<void>;
 	annotateToolCall(toolCall: ToolCall): Promise<void>;
 }
 
@@ -72,22 +52,10 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 	private presence: PresenceStatus = PresenceStatus.Unavailable;
 
 	private readonly outboundQueue: Array<string> = [];
-	private readonly pending = new Map<
-		string,
-		{
-			resolve: (msg: TextMessage) => void;
-			reject: (err: Error) => void;
-		}
-	>();
-	private readonly sessions = new Map<string, LLPSession<TSessionData>>();
+	private readonly sessions = new Map<string, TSessionData>();
 
-	// Legacy handlers
-	private messageHandler: MessageHandler<TSessionData> | null = null;
-	private startHandler: StartHandler<TSessionData> | null = null;
-
-	// New API handlers
 	private sessionCreator: SessionCreator<unknown> | null = null;
-	private typedMessageHandler: TypedMessageHandler<unknown> | null = null;
+	private messageHandler: MessageHandler<unknown> | null = null;
 	private stopHandler: StopHandler<unknown> | null = null;
 
 	private authResolve: (() => void) | null = null;
@@ -100,10 +68,6 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 		private readonly apiKey: string,
 		private readonly config: LLPClientConfig = {},
 	) {}
-
-	// -------------------------------------------------------------------
-	// New chainable API
-	// -------------------------------------------------------------------
 
 	/**
 	 * Register a callback that creates session data for each new user session.
@@ -119,48 +83,26 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 	 *   .connect();
 	 * ```
 	 */
-	onStart<T>(creator: SessionCreator<T>): TypedLLPClient<T>;
-	/** @deprecated Use the new overload: `onStart(() => createAgent(...))` */
-	onStart(handler: StartHandler<TSessionData>): void;
-	onStart<T>(
-		creatorOrHandler: SessionCreator<T> | StartHandler<TSessionData>,
-	): TypedLLPClient<T> | undefined {
+	onStart<T>(creator: SessionCreator<T>): TypedLLPClient<T> {
 		if (this.status !== ConnectionStatus.Disconnected && this.status !== ConnectionStatus.Closed) {
 			throw new AlreadyConnectedError('Must set onStart callback before connecting');
 		}
 
-		// Distinguish by arity: creator is 0-arg, legacy handler is 2-arg
-		if (creatorOrHandler.length === 0) {
-			this.sessionCreator = creatorOrHandler as SessionCreator<unknown>;
-			return this as unknown as TypedLLPClient<T>;
-		}
-
-		this.startHandler = creatorOrHandler as StartHandler<TSessionData>;
-		return undefined;
+		this.sessionCreator = creator as SessionCreator<unknown>;
+		return this as unknown as TypedLLPClient<T>;
 	}
 
 	/**
 	 * Register a message handler (new API — called via chaining after onStart).
 	 * The first argument is the session data created by onStart.
 	 */
-	onMessage(handler: TypedMessageHandler<TSessionData>): TypedLLPClient<TSessionData>;
-	/** @deprecated Use the new API: `onStart(...).onMessage((data, msg) => ...)` */
-	onMessage(handler: MessageHandler<TSessionData>): void;
-	onMessage(
-		handler: TypedMessageHandler<TSessionData> | MessageHandler<TSessionData>,
-	): TypedLLPClient<TSessionData> | undefined {
+	onMessage(handler: MessageHandler<TSessionData>): TypedLLPClient<TSessionData> {
 		if (this.status !== ConnectionStatus.Disconnected && this.status !== ConnectionStatus.Closed) {
 			throw new AlreadyConnectedError('Must set onMessage callback before connecting');
 		}
 
-		// If sessionCreator is set, we're in the new API path
-		if (this.sessionCreator) {
-			this.typedMessageHandler = handler as TypedMessageHandler<unknown>;
-			return this as unknown as TypedLLPClient<TSessionData>;
-		}
-
-		this.messageHandler = handler as MessageHandler<TSessionData>;
-		return undefined;
+		this.messageHandler = handler as MessageHandler<unknown>;
+		return this as unknown as TypedLLPClient<TSessionData>;
 	}
 
 	/**
@@ -172,10 +114,6 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 		}
 		this.stopHandler = handler as StopHandler<unknown>;
 		return this as unknown as TypedLLPClient<TSessionData>;
-	}
-
-	onPresence(handler: PresenceHandler<TSessionData>): void {
-		this.onStart(handler);
 	}
 
 	// -------------------------------------------------------------------
@@ -247,35 +185,6 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 	// -------------------------------------------------------------------
 	// Messaging
 	// -------------------------------------------------------------------
-
-	async sendMessage(msg: TextMessage, timeout?: number): Promise<TextMessage> {
-		if (this.status !== ConnectionStatus.Authenticated) {
-			throw new NotAuthenticatedError('Must be authenticated to send messages');
-		}
-
-		const timeoutMs = timeout ?? this.config.responseTimeout ?? 10000;
-
-		return new Promise((resolve, reject) => {
-			const timeoutId = setTimeout(() => {
-				this.pending.delete(msg.id);
-				reject(new TimeoutError(`Message ${msg.id} timed out`));
-			}, timeoutMs);
-
-			this.pending.set(msg.id, {
-				resolve: (response) => {
-					clearTimeout(timeoutId);
-					resolve(response);
-				},
-				reject: (err) => {
-					clearTimeout(timeoutId);
-					reject(err);
-				},
-			});
-
-			this.enqueue(msg.encode());
-		});
-	}
-
 	async annotateToolCall(toolCall: ToolCall): Promise<void> {
 		if (this.status !== ConnectionStatus.Authenticated) {
 			throw new NotAuthenticatedError('Must be authenticated to annotate tool calls');
@@ -283,7 +192,7 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 		this.enqueue(toolCall.encode());
 	}
 
-	async sendAsyncMessage(msg: TextMessage): Promise<void> {
+	private async sendAsyncMessage(msg: TextMessage): Promise<void> {
 		if (this.status !== ConnectionStatus.Authenticated) {
 			throw new NotAuthenticatedError('Must be authenticated to send messages');
 		}
@@ -375,6 +284,8 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 				case 'error':
 					this.handleErrorMessage(json);
 					break;
+				case 'ack':
+					break;
 				default:
 					console.warn(`Unknown message type: ${messageType}`);
 			}
@@ -395,46 +306,23 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 
 	private async handleTextMessage(json: Record<string, unknown>): Promise<void> {
 		const msg = TextMessage.decode(json);
-
-		// Check if this is a response to a pending request
-		const pending = this.pending.get(msg.id);
-		if (pending) {
-			this.pending.delete(msg.id);
-			pending.resolve(msg);
-			return;
-		}
-
 		const session = this.getOrCreateSession(msg.sender);
 
-		// New API path: typed message handler
-		if (this.typedMessageHandler) {
-			try {
-				console.log(`[message] received from sender=${msg.sender} id=${msg.id}`);
-				await session.waitForData();
-				const data = session.data;
-				if (!data) {
-					console.error(
-						`[message] no session data for sender=${msg.sender} — was presence received?`,
-					);
-					return;
-				}
-				const reply = await this.typedMessageHandler(data, msg, session);
-				await this.sendAsyncMessage(reply);
-			} catch (err) {
-				console.error('Error in message handler:', err);
-			}
+		console.log(`[message] received from sender=${msg.sender} id=${msg.id}`);
+		await session.waitForData();
+		const data = session.data;
+		if (!data) {
+			console.error(`[message] no session data for sender=${msg.sender} — was presence received?`);
 			return;
 		}
 
-		// Legacy API path
-		if (this.messageHandler) {
-			try {
-				const reply = await this.messageHandler(session, msg);
-				await this.sendAsyncMessage(reply);
-			} catch (err) {
-				console.error('Error in message handler:', err);
-			}
+		if (!this.messageHandler) {
+			throw new MessageHandlerNotSetError(
+				'Message handler not set, have you called onMessage before connecting?',
+			);
 		}
+		const reply = await this.messageHandler(data, msg, session);
+		await this.sendAsyncMessage(reply);
 	}
 
 	private handlePresenceMessage(json: Record<string, unknown>): void {
@@ -442,10 +330,9 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 		console.log(`[presence] sender=${presence.sender} status=${presence.status}`);
 		const session = this.getOrCreateSession(presence.sender);
 
-		// New API path: session creator + stop handler
-		if (this.sessionCreator) {
-			if (presence.status === PresenceStatus.Available) {
-				session.clearData();
+		if (presence.status === PresenceStatus.Available) {
+			session.clearData();
+			if (this.sessionCreator) {
 				Promise.resolve(this.sessionCreator())
 					.then((data) => {
 						if (data !== undefined) {
@@ -460,51 +347,22 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 						console.error(`[presence] onStart failed for sender=${presence.sender}:`, err);
 						session.failInit(err instanceof Error ? err : new Error(String(err)));
 					});
-			} else if (presence.status === PresenceStatus.Unavailable) {
-				const data = session.data;
-				if (data && this.stopHandler) {
-					Promise.resolve(this.stopHandler(data))
-						.catch((err) => {
-							console.error('Error in onStop handler:', err);
-						})
-						.finally(() => {
-							session.clear();
-							this.sessions.delete(presence.sender);
-						});
-				} else {
-					session.clear();
-					this.sessions.delete(presence.sender);
-				}
 			}
-			return;
-		}
-
-		// Legacy API path
-		if (this.startHandler) {
-			Promise.resolve(this.startHandler(session, presence))
-				.then((data) => {
-					if (presence.status === PresenceStatus.Available) {
-						session.clearData();
-						if (data !== undefined) {
-							session.setData(data);
-						}
-					}
-				})
-				.catch((err) => {
-					console.error('Error in start handler:', err);
-				})
-				.finally(() => {
-					if (presence.status === PresenceStatus.Unavailable) {
+		} else if (presence.status === PresenceStatus.Unavailable) {
+			const data = session.data;
+			if (data && this.stopHandler) {
+				Promise.resolve(this.stopHandler(data))
+					.catch((err) => {
+						console.error('Error in onStop handler:', err);
+					})
+					.finally(() => {
 						session.clear();
 						this.sessions.delete(presence.sender);
-					}
-				});
-			return;
-		}
-
-		if (presence.status === PresenceStatus.Unavailable) {
-			session.clear();
-			this.sessions.delete(presence.sender);
+					});
+			} else {
+				session.clear();
+				this.sessions.delete(presence.sender);
+			}
 		}
 	}
 
@@ -514,16 +372,6 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 		const messageId = json.id as string | undefined;
 
 		const error = new PlatformError(code, message, messageId);
-
-		// If this is a response to a pending message, reject it
-		if (messageId) {
-			const pending = this.pending.get(messageId);
-			if (pending) {
-				this.pending.delete(messageId);
-				pending.reject(error);
-				return;
-			}
-		}
 
 		// If we're authenticating, reject the auth promise
 		if (this.authReject) {
@@ -544,11 +392,6 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 			this.presence = PresenceStatus.Unavailable;
 			this.sessionId = null;
 
-			// Reject all pending messages
-			for (const pending of this.pending.values()) {
-				pending.reject(new NotConnectedError('Disconnected from server'));
-			}
-			this.pending.clear();
 			for (const session of this.sessions.values()) {
 				session.clear();
 			}

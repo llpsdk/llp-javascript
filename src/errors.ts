@@ -53,3 +53,7 @@ export class TextMessageReplyError extends Error {
 export class TextMessageEmptyError extends Error {
 	name = 'TextMessageEmptyError';
 }
+
+export class MessageHandlerNotSetError extends Error {
+	name = 'MessageHandlerNotSetError';
+}
