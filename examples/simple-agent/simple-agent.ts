@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-import { LLPClient, type LLPSession, type TextMessage } from '../../src/index.js';
+import { type Annotater, LLPClient, type TextMessage } from '../../src/index.js';
 
 async function main() {
 	config();
@@ -15,13 +15,13 @@ async function main() {
 		throw new Error('LLP_API_KEY env var is not defined');
 	}
 
-	const client = new LLPClient('simple-agent', apiKey, { url: platformUrl });
-
-	client.onMessage(async (session: LLPSession, msg: TextMessage) => {
-		const toolCall = msg.toolCall('get_weather', '{"city":"Seattle"}', 'rainy', 1_000);
-		await session.annotateToolCall(toolCall);
-		return msg.reply('this is my response');
-	});
+	const client = new LLPClient('simple-agent', apiKey, { url: platformUrl }).onMessage(
+		async (_data: unknown, msg: TextMessage, annotater: Annotater) => {
+			const toolCall = msg.toolCall('get_weather', '{"city":"Seattle"}', 'rainy', 1_000);
+			await annotater.annotateToolCall(toolCall);
+			return msg.reply('this is my response');
+		},
+	);
 
 	try {
 		console.log('Connecting to server...');
