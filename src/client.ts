@@ -12,7 +12,6 @@ import {
 } from './errors.js';
 import { PresenceMessage, TextMessage } from './message.js';
 import { ConnectionStatus, PresenceStatus } from './presence.js';
-import { LLPSession } from './session.js';
 import type { ToolCall } from './tool_call.js';
 
 export interface LLPClientConfig {
@@ -22,7 +21,7 @@ export interface LLPClientConfig {
 	readonly maxQueueSize?: number; // Default: 32
 }
 
-export type SessionCreator<T> = () => T | Promise<T>;
+export type SessionCreator<T> = () => T;
 export type MessageHandler<T> = (
 	agent: T,
 	msg: TextMessage,
@@ -306,11 +305,9 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 
 	private async handleTextMessage(json: Record<string, unknown>): Promise<void> {
 		const msg = TextMessage.decode(json);
-		const session = this.getOrCreateSession(msg.sender);
 
 		console.log(`[message] received from sender=${msg.sender} id=${msg.id}`);
-		await session.waitForData();
-		const data = session.data;
+		const data = this.sessions.get(msg.sender);
 		if (!data) {
 			console.error(`[message] no session data for sender=${msg.sender} — was presence received?`);
 			return;
@@ -321,46 +318,31 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 				'Message handler not set, have you called onMessage before connecting?',
 			);
 		}
-		const reply = await this.messageHandler(data, msg, session);
+		const reply = await this.messageHandler(data, msg, this);
 		await this.sendAsyncMessage(reply);
 	}
 
 	private handlePresenceMessage(json: Record<string, unknown>): void {
 		const presence = PresenceMessage.decode(json);
 		console.log(`[presence] sender=${presence.sender} status=${presence.status}`);
-		const session = this.getOrCreateSession(presence.sender);
 
 		if (presence.status === PresenceStatus.Available) {
-			session.clearData();
 			if (this.sessionCreator) {
-				Promise.resolve(this.sessionCreator())
-					.then((data) => {
-						if (data !== undefined) {
-							session.setData(data as TSessionData);
-							console.log(`[presence] session ready for sender=${presence.sender}`);
-						} else {
-							console.warn(`[presence] onStart returned undefined for sender=${presence.sender}`);
-							session.failInit(new Error('onStart returned undefined'));
-						}
-					})
-					.catch((err) => {
-						console.error(`[presence] onStart failed for sender=${presence.sender}:`, err);
-						session.failInit(err instanceof Error ? err : new Error(String(err)));
-					});
+				const data = this.sessionCreator() as TSessionData;
+				this.sessions.set(presence.sender, data);
+				console.log(`[presence] session ready for sender=${presence.sender}`);
 			}
 		} else if (presence.status === PresenceStatus.Unavailable) {
-			const data = session.data;
+			const data = this.sessions.get(presence.sender);
 			if (data && this.stopHandler) {
 				Promise.resolve(this.stopHandler(data))
 					.catch((err) => {
 						console.error('Error in onStop handler:', err);
 					})
 					.finally(() => {
-						session.clear();
 						this.sessions.delete(presence.sender);
 					});
 			} else {
-				session.clear();
 				this.sessions.delete(presence.sender);
 			}
 		}
@@ -391,10 +373,6 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 			this.status = ConnectionStatus.Disconnected;
 			this.presence = PresenceStatus.Unavailable;
 			this.sessionId = null;
-
-			for (const session of this.sessions.values()) {
-				session.clear();
-			}
 			this.sessions.clear();
 		}
 	}
@@ -407,16 +385,5 @@ export class LLPClient<TSessionData = unknown> implements Annotater {
 			this.authReject = null;
 			this.authResolve = null;
 		}
-	}
-
-	private getOrCreateSession(id: string): LLPSession<TSessionData> {
-		const existing = this.sessions.get(id);
-		if (existing) {
-			return existing;
-		}
-
-		const session = new LLPSession<TSessionData>(id, this);
-		this.sessions.set(id, session);
-		return session;
 	}
 }

@@ -30,5 +30,4 @@ export {
 	PresenceStatus,
 	type PresenceStatus as PresenceStatusType,
 } from './presence.js';
-export { LLPSession, LLPSession as Session } from './session.js';
 export { ToolCall } from './tool_call.js';

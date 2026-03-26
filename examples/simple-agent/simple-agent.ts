@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-import { LLPClient, type LLPSession, type TextMessage } from '../../src/index.js';
+import { type Annotater, LLPClient, type TextMessage } from '../../src/index.js';
 
 async function main() {
 	config();
@@ -17,9 +17,9 @@ async function main() {
 
 	const client = new LLPClient('simple-agent', apiKey, { url: platformUrl });
 
-	client.onMessage(async (session: LLPSession, msg: TextMessage) => {
+	client.onMessage(async (_data: unknown, msg: TextMessage, annotater: Annotater) => {
 		const toolCall = msg.toolCall('get_weather', '{"city":"Seattle"}', 'rainy', 1_000);
-		await session.annotateToolCall(toolCall);
+		await annotater.annotateToolCall(toolCall);
 		return msg.reply('this is my response');
 	});
 
